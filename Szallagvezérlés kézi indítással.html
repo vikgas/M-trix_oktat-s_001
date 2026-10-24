@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Szalagvezérlés kézi indítással - Interaktív Szimuláció</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes flow {
+      to { stroke-dashoffset: -20; }
+    }
+    .current-flow {
+      stroke-dasharray: 6 4;
+      animation: flow 0.5s linear infinite;
+    }
+    @keyframes beltMove {
+      to { background-position: 40px 0; }
+    }
+    .belt-active {
+      background-image: repeating-linear-gradient(
+        90deg,
+        #334155 0px,
+        #334155 12px,
+        #eab308 12px,
+        #eab308 20px
+      );
+      background-size: 40px 100%;
+      animation: beltMove 0.6s linear infinite;
+    }
+    .belt-stopped {
+      background-image: repeating-linear-gradient(
+        90deg,
+        #1e293b 0px,
+        #1e293b 12px,
+        #475569 12px,
+        #475569 20px
+      );
+      background-size: 40px 100%;
+    }
+    .interactive-elem {
+      cursor: pointer;
+      transition: filter 0.15s ease;
+    }
+    .interactive-elem:hover {
+      filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8));
+    }
+    .user-select-none {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans user-select-none">
+
+  <!-- Fejléc -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 sticky top-0 z-20 shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-lg">
+          ⚡
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight text-white">Szalagvezérlés kézi indítással</h1>
+          <p class="text-xs text-slate-400">Interaktív vezérlőáramkör és reteszelési szimulátor (K3 → K2 → K1)</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div id="status-badge" class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Rendszer üzemkész</span>
+        </div>
+        <button id="btn-reset" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5 cursor-pointer">
+          <span>↺</span> Alaphelyzet (Reset)
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Fő tartalom -->
+  <main class="max-w-7xl mx-auto p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Bal oldal: Interaktív Áramútterv (7 oszlop) -->
+    <section class="lg:col-span-7 bg-slate-900 rounded-2xl border border-slate-800 shadow-xl flex flex-col overflow-hidden">
+      <div class="px-5 py-3.5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Vezérlő áramkör (Áramútterv)</h2>
+          <p class="text-xs text-slate-400">Kattints közvetlenül a rajz gombjaira, biztosítójára vagy a hőkioldókra!</p>
+        </div>
+        <div class="flex items-center gap-4 text-xs">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-red-500 inline-block rounded"></span> Feszültség alatt</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-amber-400 inline-block rounded"></span> Hibajelző áramkör</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-slate-600 inline-block rounded"></span> Feszültségmentes</span>
+        </div>
+      </div>
+
+      <!-- SVG Konténer -->
+      <div class="flex-1 flex items-center justify-center p-4 bg-slate-950/60 overflow-x-auto">
+        <svg id="circuit-svg" viewBox="0 0 680 790" class="w-full max-w-[650px] h-auto">
+          <!-- Háttér rács -->
+          <defs>
+            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#1e293b" stroke-width="0.6"/>
+            </pattern>
+            <filter id="glow-amber" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glow-green" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          <rect width="680" height="790" fill="url(#grid)" rx="12" />
+
+          <!-- Cím a rajzon -->
+          <text x="340" y="32" text-anchor="middle" fill="#e2e8f0" font-size="16" font-weight="bold" font-family="serif">
+            Szalagvezérlés kézi indítással
+          </text>
+
+          <!-- ==================== VEZETÉKEK ÉS ELEMEK ==================== -->
+
+          <!-- L Fázis betáp -->
+          <text x="150" y="65" text-anchor="middle" fill="#f87171" font-size="16" font-weight="bold">L</text>
+          <line id="w-L-B1" x1="150" y1="72" x2="150" y2="85" stroke="#ef4444" stroke-width="2.5" />
+
+          <!-- B1 Biztosító (interaktív) -->
+          <g id="elem-B1" class="interactive-elem" onclick="toggleB1()">
+            <rect x="130" y="80" width="40" height="40" fill="transparent" />
+            <rect id="box-B1" x="142" y="85" width="16" height="30" fill="#0f172a" stroke="#ef4444" stroke-width="2" />
+            <line id="line-B1-inner" x1="150" y1="85" x2="150" y2="115" stroke="#ef4444" stroke-width="2" />
+            <line x1="142" y1="95" x2="158" y2="95" stroke="#94a3b8" stroke-width="1.5" />
+            <line x1="142" y1="105" x2="158" y2="105" stroke="#94a3b8" stroke-width="1.5" />
+            <text x="128" y="105" text-anchor="end" fill="#e2e8f0" font-size="14" font-weight="bold">B1</text>
+          </g>
+
+          <!-- B1 utáni csomópont -->
+          <line id="w-B1-nodeTop" x1="150" y1="115" x2="150" y2="135" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-top" cx="150" cy="135" r="3.5" fill="#475569" />
+
+          <!-- ====== HŐKIOLDÓ ÁG (HK1, HK2, HK3) ====== -->
+          <line id="w-nodeTop-HK1" x1="150" y1="135" x2="150" y2="150" stroke="#475569" stroke-width="2.5" />
+
+          <!-- HK1 (95-96) -->
+          <g id="elem-HK1" class="interactive-elem" onclick="toggleHK(1)">
+            <rect x="100" y="145" width="75" height="40" fill="transparent" />
+            <text x="115" y="168" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">HK1</text>
+            <text x="142" y="148" text-anchor="end" fill="#94a3b8" font-size="10">95</text>
+            <text x="142" y="182" text-anchor="end" fill="#94a3b8" font-size="10">96</text>
+            <!-- Bimetál jelkép -->
+            <polyline points="122,162 128,162 128,156 134,156 134,162 145,162" fill="none" stroke="#94a3b8" stroke-width="1.5" />
+            <line x1="150" y1="150" x2="162" y2="150" stroke="#94a3b8" stroke-width="2" />
+            <!-- Mozgó érintkező -->
+            <line id="contact-HK1" x1="150" y1="178" x2="158" y2="150" stroke="#475569" stroke-width="2.5" />
+          </g>
+
+          <line id="w-HK1-HK2" x1="150" y1="178" x2="150" y2="195" stroke="#475569" stroke-width="2.5" />
+
+          <!-- HK2 (95-96) -->
+          <g id="elem-HK2" class="interactive-elem" onclick="toggleHK(2)">
+            <rect x="100" y="190" width="75" height="40" fill="transparent" />
+            <text x="115" y="213" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">HK2</text>
+            <text x="142" y="193" text-anchor="end" fill="#94a3b8" font-size="10">95</text>
+            <text x="142" y="227" text-anchor="end" fill="#94a3b8" font-size="10">96</text>
+            <polyline points="122,207 128,207 128,201 134,201 134,207 145,207" fill="none" stroke="#94a3b8" stroke-width="1.5" />
+            <line x1="150" y1="195" x2="162" y2="195" stroke="#94a3b8" stroke-width="2" />
+            <line id="contact-HK2" x1="150" y1="223" x2="158" y2="195" stroke="#475569" stroke-width="2.5" />
+          </g>
+
+          <line id="w-HK2-HK3" x1="150" y1="223" x2="150" y2="240" stroke="#475569" stroke-width="2.5" />
+
+          <!-- HK3 (95-96) -->
+          <g id="elem-HK3" class="interactive-elem" onclick="toggleHK(3)">
+            <rect x="100" y="235" width="75" height="40" fill="transparent" />
+            <text x="115" y="258" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">HK3</text>
+            <text x="142" y="238" text-anchor="end" fill="#94a3b8" font-size="10">95</text>
+            <text x="142" y="272" text-anchor="end" fill="#94a3b8" font-size="10">96</text>
+            <polyline points="122,252 128,252 128,246 134,246 134,252 145,252" fill="none" stroke="#94a3b8" stroke-width="1.5" />
+            <line x1="150" y1="240" x2="162" y2="240" stroke="#94a3b8" stroke-width="2" />
+            <line id="contact-HK3" x1="150" y1="268" x2="158" y2="240" stroke="#475569" stroke-width="2.5" />
+          </g>
+
+          <line id="w-HK3-nodeBot" x1="150" y1="268" x2="150" y2="285" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-hkBot" cx="150" cy="285" r="3.5" fill="#475569" />
+
+          <!-- ====== HŐKIOLDÓ HIBAJELZŐ LÁMPA ÁG ====== -->
+          <polyline id="w-lamp-top" points="150,135 235,135 235,192" fill="none" stroke="#475569" stroke-width="2.5" />
+          <polyline id="w-lamp-bot" points="235,228 235,285 150,285" fill="none" stroke="#475569" stroke-width="2.5" />
+          
+          <g id="elem-lamp">
+            <circle id="lamp-circle" cx="235" cy="210" r="18" fill="#0f172a" stroke="#475569" stroke-width="2.5" />
+            <line id="lamp-x1" x1="223" y1="198" x2="247" y2="222" stroke="#475569" stroke-width="2" />
+            <line id="lamp-x2" x1="247" y1="198" x2="223" y2="222" stroke="#475569" stroke-width="2" />
+            <text x="262" y="206" fill="#e2e8f0" font-size="12" font-weight="bold">Hőkioldó</text>
+            <text x="262" y="222" fill="#e2e8f0" font-size="12" font-weight="bold">hibajelző</text>
+          </g>
+
+          <!-- ====== FŐ ELOSZTÓ SÍN A HŐKIOLDÓK ALATT ====== -->
+          <line id="w-hkBot-rail" x1="150" y1="285" x2="150" y2="305" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-rail-1" cx="150" cy="305" r="3.5" fill="#475569" />
+          <line id="w-rail-1-2" x1="150" y1="305" x2="340" y2="305" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-rail-2" cx="340" cy="305" r="3.5" fill="#475569" />
+          <line id="w-rail-2-3" x1="340" y1="305" x2="530" y2="305" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-rail-3" cx="530" cy="305" r="3.5" fill="#475569" />
+
+          <!-- ========================================================================= -->
+          <!--                        1. ÁG (BAL: Ki 1, Be1, K3)                         -->
+          <!-- ========================================================================= -->
+          <line id="w-b1-top" x1="150" y1="305" x2="150" y2="335" stroke="#475569" stroke-width="2.5" />
+
+          <!-- Ki 1 (1-2) NC nyomógomb -->
+          <g id="elem-Ki1" class="interactive-elem"
+             onmousedown="pressKi(1, true)" onmouseup="pressKi(1, false)" onmouseleave="pressKi(1, false)"
+             ontouchstart="pressKi(1, true); event.preventDefault();" ontouchend="pressKi(1, false)">
+            <rect x="95" y="325" width="75" height="50" fill="transparent" />
+            <text x="115" y="340" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">1</text>
+            <text x="115" y="375" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">2</text>
+            <text x="85" y="357" text-anchor="end" fill="#f87171" font-size="13" font-weight="bold">Ki 1</text>
+            <line x1="150" y1="335" x2="164" y2="335" stroke="#94a3b8" stroke-width="2" />
+            <!-- Nyomógomb szár -->
+            <g id=" actuator-Ki1">
+              <polyline points="118,344 112,344 112,360 118,360" fill="none" stroke="#f87171" stroke-width="1.8" />
+              <line x1="112" y1="352" x2="154" y2="352" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 2" />
+              <line id="contact-Ki1" x1="150" y1="368" x2="160" y2="335" stroke="#475569" stroke-width="2.5" />
+            </g>
+            <circle cx="150" cy="368" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+          <line id="w-Ki1-Be1" x1="150" y1="371" x2="150" y2="430" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-b1-parTop" cx="150" cy="430" r="3.5" fill="#475569" />
+
+          <!-- Be1 (3-4) NO nyomógomb -->
+          <g id="elem-Be1" class="interactive-elem"
+             onmousedown="pressBe(1, true)" onmouseup="pressBe(1, false)" onmouseleave="pressBe(1, false)"
+             ontouchstart="pressBe(1, true); event.preventDefault();" ontouchend="pressBe(1, false)">
+            <rect x="85" y="425" width="80" height="60" fill="transparent" />
+            <text x="128" y="422" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">3</text>
+            <text x="128" y="495" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">4</text>
+            <text x="98" y="460" text-anchor="end" fill="#4ade80" font-size="12" font-weight="bold">Be1</text>
+            <line id="w-Be1-topStub" x1="150" y1="430" x2="150" y2="442" stroke="#475569" stroke-width="2.5" />
+            <g id="actuator-Be1">
+              <polyline points="116,448 110,448 110,462 116,462" fill="none" stroke="#4ade80" stroke-width="1.8" />
+              <line x1="110" y1="455" x2="142" y2="455" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 2" />
+              <line id="contact-Be1" x1="150" y1="470" x2="136" y2="442" stroke="#475569" stroke-width="2.5" />
+            </g>
+            <line id="w-Be1-botStub" x1="150" y1="470" x2="150" y2="480" stroke="#475569" stroke-width="2.5" />
+          </g>
+
+          <!-- K 3-1 (13-14) Öntartó érintkező -->
+          <polyline id="w-K3_1-top" points="150,430 220,430 220,442" fill="none" stroke="#475569" stroke-width="2.5" />
+          <text x="185" y="422" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="bold">K 3-1</text>
+          <text x="230" y="444" fill="#94a3b8" font-size="11" font-weight="bold">13</text>
+          <text x="230" y="476" fill="#94a3b8" font-size="11" font-weight="bold">14</text>
+          <circle cx="220" cy="442" r="2.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          <line id="contact-K3_1" x1="220" y1="470" x2="208" y2="442" stroke="#475569" stroke-width="2.5" />
+          <circle cx="220" cy="470" r="2.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          <polyline id="w-K3_1-bot" points="220,473 220,480 150,480" fill="none" stroke="#475569" stroke-width="2.5" />
+
+          <circle id="n-b1-parBot" cx="150" cy="480" r="3.5" fill="#475569" />
+
+          <!-- Vezeték le K3 tekercshez (nincs reteszelés az 1. ágban) -->
+          <line id="w-Be1-K3" x1="150" y1="480" x2="150" y2="635" stroke="#475569" stroke-width="2.5" />
+
+          <!-- K3 Mágneskapcsoló tekercs (A1-A2) -->
+          <g id="elem-K3">
+            <circle cx="150" cy="615" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+            <text x="164" y="620" fill="#e2e8f0" font-size="13" font-weight="bold">A1</text>
+            <rect id="coil-K3" x="126" y="635" width="48" height="26" fill="#0f172a" stroke="#475569" stroke-width="2.5" rx="2" />
+            <text x="150" y="652" text-anchor="middle" fill="#cbd5e1" font-size="11" font-weight="bold">M3</text>
+            <text x="184" y="653" fill="#e2e8f0" font-size="14" font-weight="bold">K3</text>
+            <text x="164" y="680" fill="#e2e8f0" font-size="13" font-weight="bold">A2</text>
+            <line id="w-K3-N" x1="150" y1="661" x2="150" y2="715" stroke="#38bdf8" stroke-width="2.5" />
+            <circle cx="150" cy="685" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+
+          <!-- ========================================================================= -->
+          <!--                    2. ÁG (KÖZÉPSŐ: Ki 2, Be2, K3-2, K2)                   -->
+          <!-- ========================================================================= -->
+          <line id="w-b2-top" x1="340" y1="305" x2="340" y2="335" stroke="#475569" stroke-width="2.5" />
+
+          <!-- Ki 2 (1-2) NC nyomógomb -->
+          <g id="elem-Ki2" class="interactive-elem"
+             onmousedown="pressKi(2, true)" onmouseup="pressKi(2, false)" onmouseleave="pressKi(2, false)"
+             ontouchstart="pressKi(2, true); event.preventDefault();" ontouchend="pressKi(2, false)">
+            <rect x="285" y="325" width="75" height="50" fill="transparent" />
+            <text x="305" y="340" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">1</text>
+            <text x="305" y="375" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">2</text>
+            <text x="275" y="357" text-anchor="end" fill="#f87171" font-size="13" font-weight="bold">Ki 2</text>
+            <line x1="340" y1="335" x2="354" y2="335" stroke="#94a3b8" stroke-width="2" />
+            <g id="actuator-Ki2">
+              <polyline points="308,344 302,344 302,360 308,360" fill="none" stroke="#f87171" stroke-width="1.8" />
+              <line x1="302" y1="352" x2="344" y2="352" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 2" />
+              <line id="contact-Ki2" x1="340" y1="368" x2="350" y2="335" stroke="#475569" stroke-width="2.5" />
+            </g>
+            <circle cx="340" cy="368" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+          <line id="w-Ki2-Be2" x1="340" y1="371" x2="340" y2="430" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-b2-parTop" cx="340" cy="430" r="3.5" fill="#475569" />
+
+          <!-- Be2 (3-4) NO nyomógomb -->
+          <g id="elem-Be2" class="interactive-elem"
+             onmousedown="pressBe(2, true)" onmouseup="pressBe(2, false)" onmouseleave="pressBe(2, false)"
+             ontouchstart="pressBe(2, true); event.preventDefault();" ontouchend="pressBe(2, false)">
+            <rect x="275" y="425" width="80" height="60" fill="transparent" />
+            <text x="318" y="422" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">3</text>
+            <text x="318" y="505" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">4</text>
+            <text x="288" y="460" text-anchor="end" fill="#4ade80" font-size="12" font-weight="bold">Be2</text>
+            <line id="w-Be2-topStub" x1="340" y1="430" x2="340" y2="442" stroke="#475569" stroke-width="2.5" />
+            <g id="actuator-Be2">
+              <polyline points="306,448 300,448 300,462 306,462" fill="none" stroke="#4ade80" stroke-width="1.8" />
+              <line x1="300" y1="455" x2="332" y2="455" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 2" />
+              <line id="contact-Be2" x1="340" y1="470" x2="326" y2="442" stroke="#475569" stroke-width="2.5" />
+            </g>
+            <line id="w-Be2-botStub" x1="340" y1="470" x2="340" y2="480" stroke="#475569" stroke-width="2.5" />
+          </g>
+
+          <!-- K 2-1 (13-14) Öntartó érintkező -->
+          <polyline id="w-K2_1-top" points="340,430 410,430 410,442" fill="none" stroke="#475569" stroke-width="2.5" />
+          <text x="375" y="422" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="bold">K 2-1</text>
+          <text x="420" y="444" fill="#94a3b8" font-size="11" font-weight="bold">13</text>
+          <text x="420" y="476" fill="#94a3b8" font-size="11" font-weight="bold">14</text>
+          <circle cx="410" cy="442" r="2.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          <line id="contact-K2_1" x1="410" y1="470" x2="398" y2="442" stroke="#475569" stroke-width="2.5" />
+          <circle cx="410" cy="470" r="2.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          <polyline id="w-K2_1-bot" points="410,473 410,480 340,480" fill="none" stroke="#475569" stroke-width="2.5" />
+
+          <circle id="n-b2-parBot" cx="340" cy="480" r="3.5" fill="#475569" />
+
+          <!-- Vezeték Be2 és K3-2 reteszelés között -->
+          <line id="w-Be2-K3_2" x1="340" y1="480" x2="340" y2="535" stroke="#475569" stroke-width="2.5" />
+
+          <!-- K3-2 (23-24) Reteszelő NO érintkező -->
+          <g id="elem-K3_2">
+            <text x="292" y="532" text-anchor="end" fill="#94a3b8" font-size="12" font-weight="bold">23</text>
+            <text x="292" y="586" text-anchor="end" fill="#94a3b8" font-size="12" font-weight="bold">24</text>
+            <text x="320" y="562" text-anchor="end" fill="#38bdf8" font-size="11" font-weight="bold">K3-2</text>
+            <circle cx="340" cy="525" r="3.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+            <line id="contact-K3_2" x1="340" y1="575" x2="326" y2="540" stroke="#475569" stroke-width="2.5" />
+            <circle cx="340" cy="585" r="3.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+          <line id="w-K3_2-K2" x1="340" y1="575" x2="340" y2="635" stroke="#475569" stroke-width="2.5" />
+
+          <!-- K2 Mágneskapcsoló tekercs (A1-A2) -->
+          <g id="elem-K2">
+            <circle cx="340" cy="615" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+            <text x="354" y="620" fill="#e2e8f0" font-size="13" font-weight="bold">A1</text>
+            <rect id="coil-K2" x="316" y="635" width="48" height="26" fill="#0f172a" stroke="#475569" stroke-width="2.5" rx="2" />
+            <text x="340" y="652" text-anchor="middle" fill="#cbd5e1" font-size="11" font-weight="bold">M2</text>
+            <text x="374" y="653" fill="#e2e8f0" font-size="14" font-weight="bold">K2</text>
+            <text x="354" y="680" fill="#e2e8f0" font-size="13" font-weight="bold">A2</text>
+            <line id="w-K2-N" x1="340" y1="661" x2="340" y2="715" stroke="#38bdf8" stroke-width="2.5" />
+            <circle cx="340" cy="685" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+
+          <!-- ========================================================================= -->
+          <!--                     3. ÁG (JOBB: Ki 3, Be3, K2-2, K1)                     -->
+          <!-- ========================================================================= -->
+          <line id="w-b3-top" x1="530" y1="305" x2="530" y2="335" stroke="#475569" stroke-width="2.5" />
+
+          <!-- Ki 3 (1-2) NC nyomógomb -->
+          <g id="elem-Ki3" class="interactive-elem"
+             onmousedown="pressKi(3, true)" onmouseup="pressKi(3, false)" onmouseleave="pressKi(3, false)"
+             ontouchstart="pressKi(3, true); event.preventDefault();" ontouchend="pressKi(3, false)">
+            <rect x="475" y="325" width="75" height="50" fill="transparent" />
+            <text x="495" y="340" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">1</text>
+            <text x="495" y="375" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">2</text>
+            <text x="465" y="357" text-anchor="end" fill="#f87171" font-size="13" font-weight="bold">Ki 3</text>
+            <line x1="530" y1="335" x2="544" y2="335" stroke="#94a3b8" stroke-width="2" />
+            <g id="actuator-Ki3">
+              <polyline points="498,344 492,344 492,360 498,360" fill="none" stroke="#f87171" stroke-width="1.8" />
+              <line x1="492" y1="352" x2="534" y2="352" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 2" />
+              <line id="contact-Ki3" x1="530" y1="368" x2="540" y2="335" stroke="#475569" stroke-width="2.5" />
+            </g>
+            <circle cx="530" cy="368" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+          <line id="w-Ki3-Be3" x1="530" y1="371" x2="530" y2="430" stroke="#475569" stroke-width="2.5" />
+          <circle id="n-b3-parTop" cx="530" cy="430" r="3.5" fill="#475569" />
+
+          <!-- Be3 (3-4) NO nyomógomb -->
+          <g id="elem-Be3" class="interactive-elem"
+             onmousedown="pressBe(3, true)" onmouseup="pressBe(3, false)" onmouseleave="pressBe(3, false)"
+             ontouchstart="pressBe(3, true); event.preventDefault();" ontouchend="pressBe(3, false)">
+            <rect x="465" y="425" width="80" height="60" fill="transparent" />
+            <text x="508" y="422" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">3</text>
+            <text x="508" y="505" text-anchor="end" fill="#e2e8f0" font-size="13" font-weight="bold">4</text>
+            <text x="478" y="460" text-anchor="end" fill="#4ade80" font-size="12" font-weight="bold">Be3</text>
+            <line id="w-Be3-topStub" x1="530" y1="430" x2="530" y2="442" stroke="#475569" stroke-width="2.5" />
+            <g id="actuator-Be3">
+              <polyline points="496,448 490,448 490,462 496,462" fill="none" stroke="#4ade80" stroke-width="1.8" />
+              <line x1="490" y1="455" x2="522" y2="455" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 2" />
+              <line id="contact-Be3" x1="530" y1="470" x2="516" y2="442" stroke="#475569" stroke-width="2.5" />
+            </g>
+            <line id="w-Be3-botStub" x1="530" y1="470" x2="530" y2="480" stroke="#475569" stroke-width="2.5" />
+          </g>
+
+          <!-- K 1-1 (13-14) Öntartó érintkező -->
+          <polyline id="w-K1_1-top" points="530,430 600,430 600,442" fill="none" stroke="#475569" stroke-width="2.5" />
+          <text x="565" y="422" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="bold">K 1-1</text>
+          <text x="610" y="444" fill="#94a3b8" font-size="11" font-weight="bold">13</text>
+          <text x="610" y="476" fill="#94a3b8" font-size="11" font-weight="bold">14</text>
+          <circle cx="600" cy="442" r="2.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          <line id="contact-K1_1" x1="600" y1="470" x2="588" y2="442" stroke="#475569" stroke-width="2.5" />
+          <circle cx="600" cy="470" r="2.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          <polyline id="w-K1_1-bot" points="600,473 600,480 530,480" fill="none" stroke="#475569" stroke-width="2.5" />
+
+          <circle id="n-b3-parBot" cx="530" cy="480" r="3.5" fill="#475569" />
+
+          <!-- Vezeték Be3 és K2-2 reteszelés között -->
+          <line id="w-Be3-K2_2" x1="530" y1="480" x2="530" y2="535" stroke="#475569" stroke-width="2.5" />
+
+          <!-- K2-2 (23-24) Reteszelő NO érintkező -->
+          <g id="elem-K2_2">
+            <text x="482" y="532" text-anchor="end" fill="#94a3b8" font-size="12" font-weight="bold">23</text>
+            <text x="482" y="586" text-anchor="end" fill="#94a3b8" font-size="12" font-weight="bold">24</text>
+            <text x="510" y="562" text-anchor="end" fill="#38bdf8" font-size="11" font-weight="bold">K2-2</text>
+            <circle cx="530" cy="525" r="3.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+            <line id="contact-K2_2" x1="530" y1="575" x2="516" y2="540" stroke="#475569" stroke-width="2.5" />
+            <circle cx="530" cy="585" r="3.5" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+          <line id="w-K2_2-K1" x1="530" y1="575" x2="530" y2="635" stroke="#475569" stroke-width="2.5" />
+
+          <!-- K1 Mágneskapcsoló tekercs (A1-A2) -->
+          <g id="elem-K1">
+            <circle cx="530" cy="615" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+            <text x="544" y="620" fill="#e2e8f0" font-size="13" font-weight="bold">A1</text>
+            <rect id="coil-K1" x="506" y="635" width="48" height="26" fill="#0f172a" stroke="#475569" stroke-width="2.5" rx="2" />
+            <text x="530" y="652" text-anchor="middle" fill="#cbd5e1" font-size="11" font-weight="bold">M1</text>
+            <text x="564" y="653" fill="#e2e8f0" font-size="14" font-weight="bold">K1</text>
+            <text x="544" y="680" fill="#e2e8f0" font-size="13" font-weight="bold">A2</text>
+            <line id="w-K1-N" x1="530" y1="661" x2="530" y2="715" stroke="#38bdf8" stroke-width="2.5" />
+            <circle cx="530" cy="685" r="3" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5" />
+          </g>
+
+          <!-- ==================== ALSÓ NULLA (N) SÍN ==================== -->
+          <line x1="100" y1="715" x2="620" y2="715" stroke="#38bdf8" stroke-width="2.5" />
+          <circle cx="150" cy="715" r="3.5" fill="#38bdf8" />
+          <circle cx="340" cy="715" r="3.5" fill="#38bdf8" />
+          <circle cx="530" cy="715" r="3.5" fill="#38bdf8" />
+          <text x="632" y="720" fill="#38bdf8" font-size="14" font-weight="bold">N</text>
+
+          <!-- Alsó felirat -->
+          <text x="340" y="760" text-anchor="middle" fill="#94a3b8" font-size="15" font-family="serif">
+            Vezérlő áramkör
+          </text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- Jobb oldal: Kezelőszervek, Szalagmodell és Magyarázat (5 oszlop) -->
+    <section class="lg:col-span-5 flex flex-col gap-6">
+
+      <!-- 1. Vezérlőpult (Nyomógombok és Védelmek) -->
+      <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl">
+        <h2 class="text-sm font-bold text-slate-200 uppercase tracking-wider mb-4 flex items-center justify-between">
+          <span>Kezelőpult (Kézi vezérlés)</span>
+          <span class="text-xs font-normal text-slate-400">Nyomd meg a gombokat!</span>
+        </h2>
+
+        <!-- Biztosító és Hőkioldók -->
+        <div class="mb-5 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80">
+          <div class="text-xs font-semibold text-slate-400 mb-2.5 flex items-center justify-between">
+            <span>VÉDELMI ELEMEK (Zárt = OK, Nyitott = Kioldott)</span>
+          </div>
+          <div class="grid grid-cols-4 gap-2">
+            <button id="ctrl-B1" onclick="toggleB1()" class="px-2.5 py-2 rounded-lg text-xs font-bold border transition cursor-pointer flex flex-col items-center gap-1">
+              <span>B1 Bizt.</span>
+              <span id="lbl-B1" class="text-[10px] px-1.5 py-0.5 rounded">OK</span>
+            </button>
+            <button id="ctrl-HK1" onclick="toggleHK(1)" class="px-2.5 py-2 rounded-lg text-xs font-bold border transition cursor-pointer flex flex-col items-center gap-1">
+              <span>HK1 (M1)</span>
+              <span id="lbl-HK1" class="text-[10px] px-1.5 py-0.5 rounded">95-96 ZÁRT</span>
+            </button>
+            <button id="ctrl-HK2" onclick="toggleHK(2)" class="px-2.5 py-2 rounded-lg text-xs font-bold border transition cursor-pointer flex flex-col items-center gap-1">
+              <span>HK2 (M2)</span>
+              <span id="lbl-HK2" class="text-[10px] px-1.5 py-0.5 rounded">95-96 ZÁRT</span>
+            </button>
+            <button id="ctrl-HK3" onclick="toggleHK(3)" class="px-2.5 py-2 rounded-lg text-xs font-bold border transition cursor-pointer flex flex-col items-center gap-1">
+              <span>HK3 (M3)</span>
+              <span id="lbl-HK3" class="text-[10px] px-1.5 py-0.5 rounded">95-96 ZÁRT</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3 Ág nyomógombjai a rajz elrendezése szerint -->
+        <div class="grid grid-cols-3 gap-3">
+          <!-- 1. Ág (K3 - 3. szalag) -->
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col items-center gap-2.5">
+            <div class="text-center">
+              <div class="text-xs font-bold text-slate-200">1. Ág → K3</div>
+              <div class="text-[11px] text-amber-400 font-medium">3. Szalag (Legutolsó)</div>
+            </div>
+            <button
+              onmousedown="pressBe(1, true)" onmouseup="pressBe(1, false)" onmouseleave="pressBe(1, false)"
+              ontouchstart="pressBe(1, true); event.preventDefault();" ontouchend="pressBe(1, false)"
+              class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-emerald-900/30 transition cursor-pointer">
+              Be 1 (Indít K3)
+            </button>
+            <button
+              onmousedown="pressKi(1, true)" onmouseup="pressKi(1, false)" onmouseleave="pressKi(1, false)"
+              ontouchstart="pressKi(1, true); event.preventDefault();" ontouchend="pressKi(1, false)"
+              class="w-full py-2 rounded-lg bg-rose-600/90 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-rose-900/30 transition cursor-pointer">
+              Ki 1 (Állj K3)
+            </button>
+            <div id="state-K3" class="w-full text-center py-1 rounded text-[11px] font-bold bg-slate-800 text-slate-400">
+              K3: ELEJTVE
+            </div>
+          </div>
+
+          <!-- 2. Ág (K2 - 2. szalag) -->
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col items-center gap-2.5">
+            <div class="text-center">
+              <div class="text-xs font-bold text-slate-200">2. Ág → K2</div>
+              <div class="text-[11px] text-sky-400 font-medium">2. Szalag (Középső)</div>
+            </div>
+            <button
+              onmousedown="pressBe(2, true)" onmouseup="pressBe(2, false)" onmouseleave="pressBe(2, false)"
+              ontouchstart="pressBe(2, true); event.preventDefault();" ontouchend="pressBe(2, false)"
+              class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-emerald-900/30 transition cursor-pointer">
+              Be 2 (Indít K2)
+            </button>
+            <button
+              onmousedown="pressKi(2, true)" onmouseup="pressKi(2, false)" onmouseleave="pressKi(2, false)"
+              ontouchstart="pressKi(2, true); event.preventDefault();" ontouchend="pressKi(2, false)"
+              class="w-full py-2 rounded-lg bg-rose-600/90 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-rose-900/30 transition cursor-pointer">
+              Ki 2 (Állj K2)
+            </button>
+            <div id="state-K2" class="w-full text-center py-1 rounded text-[11px] font-bold bg-slate-800 text-slate-400">
+              K2: ELEJTVE
+            </div>
+          </div>
+
+          <!-- 3. Ág (K1 - 1. szalag) -->
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col items-center gap-2.5">
+            <div class="text-center">
+              <div class="text-xs font-bold text-slate-200">3. Ág → K1</div>
+              <div class="text-[11px] text-purple-400 font-medium">1. Szalag (Feladó)</div>
+            </div>
+            <button
+              onmousedown="pressBe(3, true)" onmouseup="pressBe(3, false)" onmouseleave="pressBe(3, false)"
+              ontouchstart="pressBe(3, true); event.preventDefault();" ontouchend="pressBe(3, false)"
+              class="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-emerald-900/30 transition cursor-pointer">
+              Be 3 (Indít K1)
+            </button>
+            <button
+              onmousedown="pressKi(3, true)" onmouseup="pressKi(3, false)" onmouseleave="pressKi(3, false)"
+              ontouchstart="pressKi(3, true); event.preventDefault();" ontouchend="pressKi(3, false)"
+              class="w-full py-2 rounded-lg bg-rose-600/90 hover:bg-rose-500 active:scale-95 text-white font-bold text-xs shadow-lg shadow-rose-900/30 transition cursor-pointer">
+              Ki 3 (Állj K1)
+            </button>
+            <div id="state-K1" class="w-full text-center py-1 rounded text-[11px] font-bold bg-slate-800 text-slate-400">
+              K1: ELEJTVE
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Technológiai Folyamat: 3 Szállítószalag -->
+      <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Technológiai folyamat (Anyagáramlás)</h2>
+          <span class="text-xs text-amber-400 font-semibold">Anyag iránya: 1. → 2. → 3.</span>
+        </div>
+
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800/90 space-y-4">
+          <!-- 1. Szalag (K1) -->
+          <div class="relative">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="font-bold text-purple-400">1. Szalag (Feladás) — Motor M1 (K1)</span>
+              <span id="belt1-txt" class="text-slate-400 font-semibold">ÁLL</span>
+            </div>
+            <div class="h-7 w-4/5 rounded-full border-2 border-slate-700 p-1 flex items-center justify-between belt-stopped transition-all" id="belt-1">
+              <div class="w-4 h-4 rounded-full bg-slate-800 border border-slate-500"></div>
+              <div class="w-4 h-4 rounded-full bg-slate-800 border border-slate-500"></div>
+            </div>
+          </div>
+
+          <!-- 2. Szalag (K2) -->
+          <div class="relative pl-8">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="font-bold text-sky-400">2. Szalag (Középső) — Motor M2 (K2)</span>
+              <span id="belt2-txt" class="text-slate-400 font-semibold">ÁLL</span>
+            </div>
+            <div class="h-7 w-4/5 rounded-full border-2 border-slate-700 p-1 flex items-center justify-between belt-stopped transition-all" id="belt-2">
+              <div class="w-4 h-4 rounded-full bg-slate-800 border border-slate-500"></div>
+              <div class="w-4 h-4 rounded-full bg-slate-800 border border-slate-500"></div>
+            </div>
+          </div>
+
+          <!-- 3. Szalag (K3) -->
+          <div class="relative pl-16">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="font-bold text-amber-400">3. Szalag (Elhordó) — Motor M3 (K3)</span>
+              <span id="belt3-txt" class="text-slate-400 font-semibold">ÁLL</span>
+            </div>
+            <div class="h-7 w-full rounded-full border-2 border-slate-700 p-1 flex items-center justify-between belt-stopped transition-all" id="belt-3">
+              <div class="w-4 h-4 rounded-full bg-slate-800 border border-slate-500"></div>
+              <div class="w-4 h-4 rounded-full bg-slate-800 border border-slate-500"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Dinamikus Állapot- és Logikai Magyarázat -->
+      <div class="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl flex-1 flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-slate-200 uppercase tracking-wider mb-2">Élő Működési Diagnosztika</h2>
+          <div id="live-explanation" class="text-xs text-slate-300 leading-relaxed bg-slate-950/80 p-3.5 rounded-xl border border-slate-800">
+            <!-- JS tölti ki -->
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+          <div><strong class="text-slate-200">Bekapcsolási reteszelés:</strong> <span class="text-emerald-400">Be1 (K3)</span> → <span class="text-emerald-400">Be2 (K2)</span> → <span class="text-emerald-400">Be3 (K1)</span>.</div>
+          <div><strong class="text-slate-200">Ürítő leállítás:</strong> <span class="text-rose-400">Ki 3 (K1)</span> → <span class="text-rose-400">Ki 2 (K2)</span> → <span class="text-rose-400">Ki 1 (K3)</span>.</div>
+          <div><strong class="text-slate-200">Hőkioldó hibajelző:</strong> Zárt HK1–3 esetén a lámpa rövidre van zárva (söntölve). Kioldáskor a lámpa a tekercsekkel sorba kapcsolódva világít.</div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script>
+    // --- ÁRAMKÖRI ÁLLAPOTTÉR ---
+    const state = {
+      B1: true,       // Főbiztosító (true = ép)
+      HK1: true,      // 1. motor hőkioldó (95-96 NC, true = zárt/OK)
+      HK2: true,      // 2. motor hőkioldó (95-96 NC, true = zárt/OK)
+      HK3: true,      // 3. motor hőkioldó (95-96 NC, true = zárt/OK)
+      Ki1: false,     // true = lenyomva (bont)
+      Ki2: false,
+      Ki3: false,
+      Be1: false,     // true = lenyomva (zár)
+      Be2: false,
+      Be3: false,
+      K3: false,      // 3. szalag mágneskapcsoló
+      K2: false,      // 2. szalag mágneskapcsoló
+      K1: false,      // 1. szalag mágneskapcsoló
+      lastMessage: "Az áramkör alaphelyzetben van. Indításhoz először nyomd meg a Be1 gombot a K3 (3. szalag) elindításához!"
+    };
+
+    // Színek a vezetékezéshez
+    const COLOR_LIVE = "#ef4444";    // Aktív fázis (piros)
+    const COLOR_FAULT = "#f59e0b";   // Hibalámpán átfolyó csökkentett áram (sárga/narancs)
+    const COLOR_OFF = "#475569";     // Feszültségmentes (szürke)
+
+    // --- FIZIKAI ÉS LOGIKAI SZIMULÁCIÓ ---
+    function evaluateCircuit() {
+      const hasLAfterB1 = state.B1;
+      const hkChainClosed = state.HK1 && state.HK2 && state.HK3;
+
+      // Csak akkor van teljes vezérlőfeszültség a sínen, ha B1 ép ÉS mindhárom HK zárt.
+      // Ha valamelyik HK kinyit, az áram a Hőkioldó hibajelző lámpán keresztül folyik,
+      // amin leesik a feszültség, így a mágneskapcsolók nem tudnak behúzni / megtartani.
+      const fullRailPower = hasLAfterB1 && hkChainClosed;
+      const faultLampActive = hasLAfterB1 && !hkChainClosed;
+
+      if (!fullRailPower) {
+        state.K3 = false;
+        state.K2 = false;
+        state.K1 = false;
+      } else {
+        // Iteratív kiértékelés a dominó-hatású reteszelésekhez (K3 -> K2 -> K1)
+        for (let i = 0; i < 3; i++) {
+          // 1. ág: K3 (Be1 vagy K3-1 öntartás)
+          const branch1Cont = !state.Ki1 && (state.Be1 || state.K3);
+          state.K3 = branch1Cont;
+
+          // 2. ág: K2 (Be2 vagy K2-1 öntartás, ÉS K3-2 reteszelés zárt)
+          const branch2Cont = !state.Ki2 && (state.Be2 || state.K2) && state.K3;
+          state.K2 = branch2Cont;
+
+          // 3. ág: K1 (Be3 vagy K1-1 öntartás, ÉS K2-2 reteszelés zárt)
+          const branch3Cont = !state.Ki3 && (state.Be3 || state.K1) && state.K2;
+          state.K1 = branch3Cont;
+        }
+      }
+
+      renderCircuit(hasLAfterB1, hkChainClosed, fullRailPower, faultLampActive);
+      renderControls(hasLAfterB1, hkChainClosed, faultLampActive);
+    }
+
+    // Segédfüggvény vonalak színezéséhez és áramfolyás animációhoz
+    function setWire(id, mode) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.remove("current-flow");
+      if (mode === "live") {
+        el.setAttribute("stroke", COLOR_LIVE);
+      } else if (mode === "flow") {
+        el.setAttribute("stroke", COLOR_LIVE);
+        el.classList.add("current-flow");
+      } else if (mode === "fault") {
+        el.setAttribute("stroke", COLOR_FAULT);
+        el.classList.add("current-flow");
+      } else {
+        el.setAttribute("stroke", COLOR_OFF);
+      }
+    }
+
+    function setNode(id, mode) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (mode === "live" || mode === "flow") {
+        el.setAttribute("fill", COLOR_LIVE);
+      } else if (mode === "fault") {
+        el.setAttribute("fill", COLOR_FAULT);
+      } else {
+        el.setAttribute("fill", COLOR_OFF);
+      }
+    }
+
+    // --- SVG FRISSÍTÉSE ---
+    function renderCircuit(hasLAfterB1, hkChainClosed, fullRailPower, faultLampActive) {
+      // B1 biztosító
+      const boxB1 = document.getElementById("box-B1");
+      const lineB1 = document.getElementById("line-B1-inner");
+      if (state.B1) {
+        boxB1.setAttribute("stroke", COLOR_LIVE);
+        lineB1.setAttribute("stroke", COLOR_LIVE);
+        lineB1.setAttribute("stroke-dasharray", "none");
+      } else {
+        boxB1.setAttribute("stroke", "#f43f5e");
+        lineB1.setAttribute("stroke", "#475569");
+        lineB1.setAttribute("stroke-dasharray", "3 5");
+      }
+
+      const topMode = hasLAfterB1 ? "live" : "off";
+      setWire("w-B1-nodeTop", topMode);
+      setNode("n-top", topMode);
+      setWire("w-nodeTop-HK1", topMode);
+
+      // HK1 érintkező
+      const cHK1 = document.getElementById("contact-HK1");
+      cHK1.setAttribute("x2", state.HK1 ? "158" : "136");
+      const afterHK1 = hasLAfterB1 && state.HK1;
+      setWire("contact-HK1", afterHK1 ? "live" : "off");
+      setWire("w-HK1-HK2", afterHK1 ? "live" : "off");
+
+      // HK2 érintkező
+      const cHK2 = document.getElementById("contact-HK2");
+      cHK2.setAttribute("x2", state.HK2 ? "158" : "136");
+      const afterHK2 = afterHK1 && state.HK2;
+      setWire("contact-HK2", afterHK2 ? "live" : "off");
+      setWire("w-HK2-HK3", afterHK2 ? "live" : "off");
+
+      // HK3 érintkező
+      const cHK3 = document.getElementById("contact-HK3");
+      cHK3.setAttribute("x2", state.HK3 ? "158" : "136");
+      const afterHK3 = afterHK2 && state.HK3;
+      setWire("contact-HK3", afterHK3 ? "live" : "off");
+      setWire("w-HK3-nodeBot", afterHK3 ? "live" : "off");
+
+      // Hőkioldó hibajelző lámpa
+      const lampCircle = document.getElementById("lamp-circle");
+      const lampX1 = document.getElementById("lamp-x1");
+      const lampX2 = document.getElementById("lamp-x2");
+
+      // Van-e zárt út a lámpa alatt a nulláig (pl. K3 ágán ha Be1 nyomva, vagy tekercsen keresztül)?
+      // A valóságban a hibalámpa a vezérlőágon (vagy jelzőágon) keresztül záródik.
+      // Ha HK nyitott és B1 zárt, a lámpa világít:
+      if (faultLampActive) {
+        setWire("w-lamp-top", "fault");
+        setWire("w-lamp-bot", "fault");
+        lampCircle.setAttribute("fill", "#f59e0b");
+        lampCircle.setAttribute("stroke", "#fef08a");
+        lampCircle.setAttribute("filter", "url(#glow-amber)");
+        lampX1.setAttribute("stroke", "#0f172a");
+        lampX2.setAttribute("stroke", "#0f172a");
+      } else {
+        setWire("w-lamp-top", hasLAfterB1 ? "live" : "off");
+        setWire("w-lamp-bot", fullRailPower ? "live" : "off");
+        lampCircle.setAttribute("fill", "#0f172a");
+        lampCircle.setAttribute("stroke", fullRailPower ? COLOR_LIVE : COLOR_OFF);
+        lampCircle.removeAttribute("filter");
+        lampX1.setAttribute("stroke", fullRailPower ? COLOR_LIVE : COLOR_OFF);
+        lampX2.setAttribute("stroke", fullRailPower ? COLOR_LIVE : COLOR_OFF);
+      }
+
+      // Fő elosztó sín a HK3 alatt
+      const railMode = fullRailPower ? "live" : (faultLampActive ? "fault" : "off");
+      setNode("n-hkBot", railMode);
+      setWire("w-hkBot-rail", railMode);
+      setNode("n-rail-1", railMode);
+      setWire("w-rail-1-2", railMode);
+      setNode("n-rail-2", railMode);
+      setWire("w-rail-2-3", railMode);
+      setNode("n-rail-3", railMode);
+
+      // ================= 1. ÁG (Ki 1, Be1, K 3-1, K3) =================
+      setWire("w-b1-top", railMode);
+      const cKi1 = document.getElementById("contact-Ki1");
+      cKi1.setAttribute("x2", state.Ki1 ? "138" : "160");
+      const afterKi1Mode = !state.Ki1 ? railMode : "off";
+      setWire("contact-Ki1", afterKi1Mode);
+      setWire("w-Ki1-Be1", afterKi1Mode);
+      setNode("n-b1-parTop", afterKi1Mode);
+      setWire("w-Be1-topStub", afterKi1Mode);
+      setWire("w-K3_1-top", afterKi1Mode);
+
+      // Be1 és K 3-1 érintkezők pozíciója
+      const cBe1 = document.getElementById("contact-Be1");
+      cBe1.setAttribute("x2", state.Be1 ? "150" : "136");
+      const cK3_1 = document.getElementById("contact-K3_1");
+      cK3_1.setAttribute("x2", state.K3 ? "220" : "208");
+
+      const be1PassMode = state.Be1 ? (state.K3 ? "flow" : afterKi1Mode) : "off";
+      const k3_1PassMode = state.K3 ? "flow" : "off";
+
+      setWire("contact-Be1", be1PassMode);
+      setWire("w-Be1-botStub", be1PassMode);
+      setWire("contact-K3_1", k3_1PassMode);
+      setWire("w-K3_1-bot", k3_1PassMode);
+
+      const afterBe1Mode = state.K3 ? "flow" : (state.Be1 ? afterKi1Mode : "off");
+      setNode("n-b1-parBot", afterBe1Mode);
+      setWire("w-Be1-K3", afterBe1Mode);
+
+      const coilK3 = document.getElementById("coil-K3");
+      if (state.K3) {
+        coilK3.setAttribute("fill", "#059669");
+        coilK3.setAttribute("stroke", "#34d399");
+        coilK3.setAttribute("filter", "url(#glow-green)");
+      } else {
+        coilK3.setAttribute("fill", "#0f172a");
+        coilK3.setAttribute("stroke", afterBe1Mode === "fault" ? COLOR_FAULT : COLOR_OFF);
+        coilK3.removeAttribute("filter");
+      }
+
+      // ================= 2. ÁG (Ki 2, Be2, K 2-1, K3-2, K2) =================
+      setWire("w-b2-top", railMode);
+      const cKi2 = document.getElementById("contact-Ki2");
+      cKi2.setAttribute("x2", state.Ki2 ? "328" : "350");
+      const afterKi2Mode = !state.Ki2 ? railMode : "off";
+      setWire("contact-Ki2", afterKi2Mode);
+      setWire("w-Ki2-Be2", afterKi2Mode);
+      setNode("n-b2-parTop", afterKi2Mode);
+      setWire("w-Be2-topStub", afterKi2Mode);
+      setWire("w-K2_1-top", afterKi2Mode);
+
+      // Be2 és K 2-1 érintkezők
+      const cBe2 = document.getElementById("contact-Be2");
+      cBe2.setAttribute("x2", state.Be2 ? "340" : "326");
+      const cK2_1 = document.getElementById("contact-K2_1");
+      cK2_1.setAttribute("x2", state.K2 ? "410" : "398");
+
+      const be2PassMode = state.Be2 ? (state.K2 ? "flow" : afterKi2Mode) : "off";
+      const k2_1PassMode = state.K2 ? "flow" : "off";
+
+      setWire("contact-Be2", be2PassMode);
+      setWire("w-Be2-botStub", be2PassMode);
+      setWire("contact-K2_1", k2_1PassMode);
+      setWire("w-K2_1-bot", k2_1PassMode);
+
+      const afterBe2Mode = state.K2 ? "flow" : ((state.Be2 || state.K2) ? afterKi2Mode : "off");
+      setNode("n-b2-parBot", afterBe2Mode);
+      setWire("w-Be2-K3_2", afterBe2Mode);
+
+      // K3-2 reteszelő érintkező (23-24)
+      const cK3_2 = document.getElementById("contact-K3_2");
+      cK3_2.setAttribute("x2", state.K3 ? "340" : "326");
+      const afterK3_2Mode = state.K3 ? (state.K2 ? "flow" : afterBe2Mode) : "off";
+      setWire("contact-K3_2", afterK3_2Mode);
+      setWire("w-K3_2-K2", afterK3_2Mode);
+
+      const coilK2 = document.getElementById("coil-K2");
+      if (state.K2) {
+        coilK2.setAttribute("fill", "#0284c7");
+        coilK2.setAttribute("stroke", "#38bdf8");
+        coilK2.setAttribute("filter", "url(#glow-green)");
+      } else {
+        coilK2.setAttribute("fill", "#0f172a");
+        coilK2.setAttribute("stroke", afterK3_2Mode === "fault" ? COLOR_FAULT : COLOR_OFF);
+        coilK2.removeAttribute("filter");
+      }
+
+      // ================= 3. ÁG (Ki 3, Be3, K 1-1, K2-2, K1) =================
+      setWire("w-b3-top", railMode);
+      const cKi3 = document.getElementById("contact-Ki3");
+      cKi3.setAttribute("x2", state.Ki3 ? "518" : "540");
+      const afterKi3Mode = !state.Ki3 ? railMode : "off";
+      setWire("contact-Ki3", afterKi3Mode);
+      setWire("w-Ki3-Be3", afterKi3Mode);
+      setNode("n-b3-parTop", afterKi3Mode);
+      setWire("w-Be3-topStub", afterKi3Mode);
+      setWire("w-K1_1-top", afterKi3Mode);
+
+      // Be3 és K 1-1 érintkezők
+      const cBe3 = document.getElementById("contact-Be3");
+      cBe3.setAttribute("x2", state.Be3 ? "530" : "516");
+      const cK1_1 = document.getElementById("contact-K1_1");
+      cK1_1.setAttribute("x2", state.K1 ? "600" : "588");
+
+      const be3PassMode = state.Be3 ? (state.K1 ? "flow" : afterKi3Mode) : "off";
+      const k1_1PassMode = state.K1 ? "flow" : "off";
+
+      setWire("contact-Be3", be3PassMode);
+      setWire("w-Be3-botStub", be3PassMode);
+      setWire("contact-K1_1", k1_1PassMode);
+      setWire("w-K1_1-bot", k1_1PassMode);
+
+      const afterBe3Mode = state.K1 ? "flow" : ((state.Be3 || state.K1) ? afterKi3Mode : "off");
+      setNode("n-b3-parBot", afterBe3Mode);
+      setWire("w-Be3-K2_2", afterBe3Mode);
+
+      // K2-2 reteszelő érintkező (23-24)
+      const cK2_2 = document.getElementById("contact-K2_2");
+      cK2_2.setAttribute("x2", state.K2 ? "530" : "516");
+      const afterK2_2Mode = state.K2 ? (state.K1 ? "flow" : afterBe3Mode) : "off";
+      setWire("contact-K2_2", afterK2_2Mode);
+      setWire("w-K2_2-K1", afterK2_2Mode);
+
+      const coilK1 = document.getElementById("coil-K1");
+      if (state.K1) {
+        coilK1.setAttribute("fill", "#7c3aed");
+        coilK1.setAttribute("stroke", "#a78bfa");
+        coilK1.setAttribute("filter", "url(#glow-green)");
+      } else {
+        coilK1.setAttribute("fill", "#0f172a");
+        coilK1.setAttribute("stroke", afterK2_2Mode === "fault" ? COLOR_FAULT : COLOR_OFF);
+        coilK1.removeAttribute("filter");
+      }
+    }
+
+    // --- JOBB OLDALI KEZELŐPULT ÉS SZALAGOK FRISSÍTÉSE ---
+    function renderControls(hasLAfterB1, hkChainClosed, faultLampActive) {
+      // Fejléc státusz
+      const badge = document.getElementById("status-badge");
+      if (!state.B1) {
+        badge.className = "px-3.5 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-2";
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>B1 Biztosító kiolvadt!</span>`;
+      } else if (faultLampActive) {
+        badge.className = "px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/40 flex items-center gap-2";
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span><span>HŐKIOLDÓ HIBA! (Hibajelző világít)</span>`;
+      } else if (state.K1 && state.K2 && state.K3) {
+        badge.className = "px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-2";
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>Mindhárom szalag üzemel (Teljes üzem)</span>`;
+      } else if (state.K3 || state.K2) {
+        badge.className = "px-3.5 py-1.5 rounded-full text-xs font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/40 flex items-center gap-2";
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span><span>Részleges szalagüzem</span>`;
+      } else {
+        badge.className = "px-3.5 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-2";
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span><span>Álló helyzet (Készenlét)</span>`;
+      }
+
+      // Védelmi gombok megjelenése
+      updateProtBtn("B1", state.B1, "ÉP (ZÁRT)", "KIOLVADT");
+      updateProtBtn("HK1", state.HK1, "95-96 ZÁRT", "KIOLDOTT!");
+      updateProtBtn("HK2", state.HK2, "95-96 ZÁRT", "KIOLDOTT!");
+      updateProtBtn("HK3", state.HK3, "95-96 ZÁRT", "KIOLDOTT!");
+
+      // Mágneskapcsoló visszajelzők és szalagok
+      updateContactorAndBelt(3, state.K3, "amber");
+      updateContactorAndBelt(2, state.K2, "sky");
+      updateContactorAndBelt(1, state.K1, "purple");
+
+      // Élő magyarázat
+      document.getElementById("live-explanation").innerHTML = state.lastMessage;
+    }
+
+    function updateProtBtn(id, isOk, okText, errText) {
+      const btn = document.getElementById("ctrl-" + id);
+      const lbl = document.getElementById("lbl-" + id);
+      if (isOk) {
+        btn.className = "px-2.5 py-2 rounded-lg text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition cursor-pointer flex flex-col items-center gap-1";
+        lbl.className = "text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300";
+        lbl.textContent = okText;
+      } else {
+        btn.className = "px-2.5 py-2 rounded-lg text-xs font-bold border border-amber-500 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 transition cursor-pointer flex flex-col items-center gap-1 animate-pulse";
+        lbl.className = "text-[10px] px-1.5 py-0.5 rounded bg-rose-600 text-white";
+        lbl.textContent = errText;
+      }
+    }
+
+    function updateContactorAndBelt(num, isOn, color) {
+      const stateEl = document.getElementById("state-K" + num);
+      const beltEl = document.getElementById("belt-" + num);
+      const beltTxt = document.getElementById("belt" + num + "-txt");
+
+      if (isOn) {
+        stateEl.className = "w-full text-center py-1 rounded text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+        stateEl.textContent = `K${num}: BEHÚZVA (13-14 zárt)`;
+        beltEl.classList.remove("belt-stopped");
+        beltEl.classList.add("belt-active");
+        beltTxt.className = "text-emerald-400 font-bold";
+        beltTxt.textContent = "MOZOG ➔";
+      } else {
+        stateEl.className = "w-full text-center py-1 rounded text-[11px] font-bold bg-slate-800 text-slate-400";
+        stateEl.textContent = `K${num}: ELEJTVE`;
+        beltEl.classList.remove("belt-active");
+        beltEl.classList.add("belt-stopped");
+        beltTxt.className = "text-slate-500 font-semibold";
+        beltTxt.textContent = "ÁLL";
+      }
+    }
+
+    // --- ESEMÉNYKEZELŐK ---
+    function toggleB1() {
+      state.B1 = !state.B1;
+      if (!state.B1) {
+        state.lastMessage = `<strong class="text-rose-400">B1 biztosító kiolvadt/lekapcsolva!</strong> A teljes vezérlőáramkör feszültségmentessé vált, minden mágneskapcsoló (K1, K2, K3) azonnal elejtett, és a hibajelző lámpa sem kaphat áramot.`;
+      } else {
+        state.lastMessage = `<strong class="text-emerald-400">B1 biztosító visszakapcsolva.</strong> A vezérlőfeszültség helyreállt, a mágneskapcsolók az öntartás elvesztése miatt alaphelyzetben (elejtve) várják az újraindítást.`;
+      }
+      evaluateCircuit();
+    }
+
+    function toggleHK(num) {
+      const key = "HK" + num;
+      state[key] = !state[key];
+      if (!state[key]) {
+        state.lastMessage = `<strong class="text-amber-400">HK${num} hőkioldó (95-96) kioldott!</strong> Megszakadt a soros hőkioldó-lánc, így az összes működő szalag azonnal leállt. Mivel a HK érintkezők már nem söntölik (zárják rövidre) a <strong>Hőkioldó hibajelző lámpát</strong>, az áram a lámpán keresztül folyik, és a lámpa világít!`;
+      } else {
+        const allOk = state.HK1 && state.HK2 && state.HK3;
+        if (allOk) {
+          state.lastMessage = `<strong class="text-emerald-400">HK${num} hőkioldó alaphelyzetbe állítva (95-96 zárt).</strong> A három soros hőkioldó ismét rövidre zárja (söntöli) a hibajelző lámpát, így az elalszik. A rendszer újra indítható a Be1 gombbal.`;
+        } else {
+          state.lastMessage = `HK${num} visszaállítva, de még van más kioldott hőkioldó a soros láncban!`;
+        }
+      }
+      evaluateCircuit();
+    }
+
+    function pressBe(branch, isDown) {
+      const key = "Be" + branch;
+      state[key] = isDown;
+
+      if (isDown) {
+        if (!state.B1) {
+          state.lastMessage = `<strong class="text-rose-400">Hiába nyomod a ${key} gombot:</strong> a B1 biztosító ki van olvadva, nincs vezérlőfeszültség!`;
+        } else if (!state.HK1 || !state.HK2 || !state.HK3) {
+          state.lastMessage = `<strong class="text-amber-400">Reteszelt hibaállapot!</strong> Amíg valamelyik hőkioldó (HK1–HK3) nyitva van, a hibajelző lámpa nagy ellenállása miatt a mágneskapcsolók nem tudnak behúzni.`;
+        } else if (branch === 1) {
+          state.lastMessage = `<strong class="text-emerald-400">Be1 megnyomva → K3 behúz!</strong> Elindult a 3. (legutolsó) szállítószalag. A <strong>K 3-1 (13-14)</strong> öntartó érintkező és a 2. ágban lévő <strong>K3-2 (23-24)</strong> reteszelő érintkező bezárt. Most már indítható a K2!`;
+        } else if (branch === 2) {
+          if (!state.K3) {
+            state.lastMessage = `<strong class="text-rose-400">Reteszelési védelem! A K2 nem indítható!</strong> Mivel a <strong>K3</strong> (3. szalag) még áll, a <strong>K3-2 (23-24)</strong> segédérintkező nyitva van. Először a Be1 gombbal indítsd el a K3-at, különben a 2. szalag az álló 3. szalagra hordaná az anyagot!`;
+          } else {
+            state.lastMessage = `<strong class="text-emerald-400">Be2 megnyomva → K2 behúz!</strong> Mivel a K3-2 már zárt, a K2 meghúzott, zárta a <strong>K 2-1</strong> öntartását és a 3. ágban lévő <strong>K2-2 (23-24)</strong> reteszelő érintkezőt. Most már indítható a K1 is!`;
+          }
+        } else if (branch === 3) {
+          if (!state.K2) {
+            state.lastMessage = `<strong class="text-rose-400">Reteszelési védelem! A K1 nem indítható!</strong> Mivel a <strong>K2</strong> (2. szalag) még áll, a <strong>K2-2 (23-24)</strong> segédérintkező nyitva van. Tartsd be a K3 → K2 → K1 indítási sorrendet!`;
+          } else {
+            state.lastMessage = `<strong class="text-emerald-400">Be3 megnyomva → K1 behúz!</strong> Mindhárom szalag üzemel, az anyag biztonságosan áramlik az 1. szalagról a 2.-on át a 3. szalagra.`;
+          }
+        }
+      }
+      evaluateCircuit();
+    }
+
+    function pressKi(branch, isDown) {
+      const key = "Ki" + branch;
+      state[key] = isDown;
+
+      if (isDown) {
+        if (branch === 3) {
+          state.lastMessage = `<strong class="text-sky-400">Ki 3 megnyomva → K1 leállt.</strong> Csak az 1. (feladó) szalag állt meg, a K2 és K3 tovább jár, így a rendszeren lévő anyag torlódás nélkül leürülhet.`;
+        } else if (branch === 2) {
+          state.lastMessage = `<strong class="text-amber-400">Ki 2 megnyomva → K2 (és K1) leállt!</strong> A K2 elejtésekor kinyitott a <strong>K2-2 (23-24)</strong> érintkező, így ha a K1 még járt, az is azonnal megállt, hogy ne hordjon anyagot a megállított 2. szalagra. A 3. szalag (K3) tovább ürít.`;
+        } else if (branch === 1) {
+          state.lastMessage = `<strong class="text-rose-400">Ki 1 megnyomva → K3, K2 és K1 azonnal leállt!</strong> Mivel a legutolsó szalagot (K3) állítottad meg, a <strong>K3-2</strong>, majd a <strong>K2-2</strong> bontása miatt dominószerűen az összes előtte lévő szalag is azonnal leállt, megakadályozva a torlódást!`;
+        }
+      }
+      evaluateCircuit();
+    }
+
+    // Reset gomb
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      state.B1 = true;
+      state.HK1 = true;
+      state.HK2 = true;
+      state.HK3 = true;
+      state.Ki1 = false;
+      state.Ki2 = false;
+      state.Ki3 = false;
+      state.Be1 = false;
+      state.Be2 = false;
+      state.Be3 = false;
+      state.K1 = false;
+      state.K2 = false;
+      state.K3 = false;
+      state.lastMessage = "Minden elem alaphelyzetbe állítva. Indításhoz először nyomd meg a Be1 gombot (K3)!";
+      evaluateCircuit();
+    });
+
+    // Kezdeti kirajzolás
+    evaluateCircuit();
+  </script>
+</body>
+</html>

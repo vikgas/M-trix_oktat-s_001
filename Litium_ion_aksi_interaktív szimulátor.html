@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interaktív Lítium-ion (LiFePO4) Akkumulátor Szimulátor</title>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-green: #22c55e;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 15px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        header h1 {
+            font-size: 1.6rem;
+            color: var(--accent-blue);
+            margin-bottom: 6px;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 850px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .canvas-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        canvas {
+            background: #090d16;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 700px;
+            height: auto;
+            border: 1px solid #1e293b;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            margin-top: 14px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .controls-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .mode-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 12px 8px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #334155;
+            color: var(--text-main);
+            font-size: 0.9rem;
+        }
+
+        .btn:hover {
+            filter: brightness(1.15);
+        }
+
+        .btn.active-discharge {
+            background: var(--accent-orange);
+            color: #000;
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn.active-idle {
+            background: var(--accent-blue);
+            color: #000;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+        }
+
+        .btn.active-charge {
+            background: var(--accent-green);
+            color: #000;
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .control-group label span {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-blue);
+            cursor: pointer;
+        }
+
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .stat-box {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #1e293b;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .info-panel {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 18px 22px;
+            border: 1px solid #334155;
+            line-height: 1.5;
+        }
+
+        .info-panel h3 {
+            color: var(--accent-blue);
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+
+        .chem-eq {
+            background: #0f172a;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.95rem;
+            margin-top: 10px;
+            border-left: 4px solid var(--accent-blue);
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Lítium-ion (LiFePO4) Akkumulátor Interaktív Szimulátor</h1>
+        <p>Szemléltető modell: elektronáramlás a külső körben és Li⁺ ionok interkalációja a cellán belül</p>
+    </header>
+
+    <div class="main-grid">
+        <!-- Szimulációs vászon -->
+        <div class="canvas-card">
+            <canvas id="batteryCanvas" width="700" height="440"></canvas>
+            <div class="legend">
+                <div class="legend-item">
+                    <span class="dot" style="background: #22c55e; box-shadow: 0 0 6px #22c55e;"></span>
+                    <span>Lítium-ion (Li⁺) az elektrolitban</span>
+                </div>
+                <div class="legend-item">
+                    <span class="dot" style="background: #38bdf8; box-shadow: 0 0 6px #38bdf8;"></span>
+                    <span>Elektron (e⁻) a vezetékben</span>
+                </div>
+                <div class="legend-item">
+                    <span class="dot" style="background: #f59e0b;"></span>
+                    <span>Szeparátor (csak az ionokat engedi át)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vezérlőpult és Telemetria -->
+        <div class="controls-card">
+            <div class="control-group">
+                <label>Üzemmód kiválasztása:</label>
+                <div class="mode-buttons">
+                    <button id="btnDischarge" class="btn active-discharge" onclick="setMode('discharge')">⚡ Kisütés</button>
+                    <button id="btnIdle" class="btn" onclick="setMode('idle')">⏸️ Nyugalmi</button>
+                    <button id="btnCharge" class="btn" onclick="setMode('charge')">🔌 Töltés</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Töltöttségi szint (SoC): <span id="socLabel">80%</span></label>
+                <input type="range" id="socSlider" min="0" max="100" value="80" oninput="manualSoC(this.value)">
+            </div>
+
+            <div class="control-group">
+                <label>Áramerősség / Sebesség: <span id="speedLabel">25 A (0.25C)</span></label>
+                <input type="range" id="speedSlider" min="5" max="100" value="25" oninput="updateSpeed(this.value)">
+            </div>
+
+            <div class="telemetry-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Cella / Pack feszültség (16S)</div>
+                    <div class="stat-value" id="voltValue">3.32 V / 53.1 V</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Pillanatnyi teljesítmény</div>
+                    <div class="stat-value" id="powerValue">1.33 kW</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Megmozgatott e⁻ tömeg (48V-on)</div>
+                    <div class="stat-value" id="electronMassValue">174.1 µg</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Vándorolt Li⁺ tömeg (16S packban)</div>
+                    <div class="stat-value" id="ionMassValue">35.2 g</div>
+                </div>
+            </div>
+
+            <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+                *A tömegadatok egy <strong>48V (51.2V) 100Ah (~5.12 kWh)</strong> LiFePO4 akkupackra vannak vetítve az aktuális töltöttségi szint (SoC) alapján.
+            </div>
+        </div>
+    </div>
+
+    <!-- Dinamikus magyarázó panel -->
+    <div class="info-panel">
+        <h3 id="infoTitle">⚡ Kisütés (Terhelés alatt)</h3>
+        <p id="infoDesc">
+            Kisütéskor az anód (grafit) rétegei közül a lítiumatomok leadnak egy-egy elektront (oxidáció). Az <strong>elektronok (e⁻)</strong> a réz áramgyűjtőn és a külső áramkörön át a fogyasztón (pl. inverteren) keresztül munkát végezve jutnak el a katódra. Ezzel egy időben a pozitív <strong>lítium-ionok (Li⁺)</strong> a belső elektroliton és a mikroporózus szeparátoron átvándorolnak a katódba (LiFePO4 rácsba), ahol újra találkoznak az elektronokkal (redukció).
+        </p>
+        <div class="chem-eq" id="chemEq">
+            Anód (-): LiC₆ → C₆ + Li⁺ + e⁻ &nbsp;&nbsp;|&nbsp;&nbsp; Katód (+): FePO₄ + Li⁺ + e⁻ → LiFePO₄
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('batteryCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Állapotváltozók
+    let mode = 'discharge'; // 'discharge', 'charge', 'idle'
+    let soc = 80;           // 0 - 100 %
+    let currentAmps = 25;   // 5 - 100 A
+
+    // Részecskék
+    const TOTAL_IONS = 40;
+    const ions = [];
+    const electrons = [];
+
+    // Geometriai konstansok a vásznon
+    const CELL_TOP = 120;
+    const CELL_BOTTOM = 390;
+    const ANODE_X = 110;
+    const ANODE_W = 140;
+    const CATHODE_X = 450;
+    const CATHODE_W = 140;
+    const SEP_X = 345;
+
+    // Lítium-ionok inicializálása (6 sor x 4 oszlop rácshely mindkét oldalon + szabadon mozgók)
+    for (let i = 0; i < TOTAL_IONS; i++) {
+        ions.push({
+            id: i,
+            x: 0,
+            y: 0,
+            targetX: 0,
+            targetY: 0,
+            inTransit: false,
+            transitProgress: Math.random()
+        });
+    }
+
+    // Külső áramkör útvonala az elektronoknak
+    const wirePath = [
+        { x: 180, y: 120 }, // Anód teteje
+        { x: 180, y: 45 },  // Bal felső sarok
+        { x: 520, y: 45 },  // Jobb felső sarok
+        { x: 520, y: 120 }  // Katód teteje
+    ];
+
+    // Elektronok létrehozása a vezetéken
+    const NUM_ELECTRONS = 18;
+    for (let i = 0; i < NUM_ELECTRONS; i++) {
+        electrons.push({
+            progress: i / NUM_ELECTRONS // 0.0 -> 1.0 a vezetéken
+        });
+    }
+
+    function setMode(newMode) {
+        mode = newMode;
+        document.getElementById('btnDischarge').className = 'btn' + (mode === 'discharge' ? ' active-discharge' : '');
+        document.getElementById('btnIdle').className = 'btn' + (mode === 'idle' ? ' active-idle' : '');
+        document.getElementById('btnCharge').className = 'btn' + (mode === 'charge' ? ' active-charge' : '');
+        updateInfoPanel();
+    }
+
+    function manualSoC(val) {
+        soc = parseFloat(val);
+        updateTelemetry();
+    }
+
+    function updateSpeed(val) {
+        currentAmps = parseFloat(val);
+        const cRate = (currentAmps / 100).toFixed(2);
+        document.getElementById('speedLabel').innerText = `${currentAmps} A (${cRate}C)`;
+        updateTelemetry();
+    }
+
+    function updateInfoPanel() {
+        const title = document.getElementById('infoTitle');
+        const desc = document.getElementById('infoDesc');
+        const eq = document.getElementById('chemEq');
+
+        if (mode === 'discharge') {
+            title.innerText = '⚡ Kisütés (Fogyasztó táplálása)';
+            title.style.color = '#f59e0b';
+            desc.innerHTML = 'Kisütéskor az <strong>anód (grafit)</strong> rétegei közül a lítiumatomok leadnak egy-egy elektront. Az <strong>elektronok (e⁻)</strong> a külső vezetéken át a fogyasztón keresztül a katódra áramlanak. Ezzel szinkronban a pozitív <strong>lítium-ionok (Li⁺)</strong> az elektroliton és a szeparátoron át a <strong>katódba (LiFePO₄)</strong> vándorolnak.';
+            eq.innerHTML = 'Anód (-): LiC₆ → C₆ + Li⁺ + e⁻ &nbsp;&nbsp;|&nbsp;&nbsp; Katód (+): FePO₄ + Li⁺ + e⁻ → LiFePO₄';
+        } else if (mode === 'charge') {
+            title.innerText = '🔌 Töltés (Energia betáplálása)';
+            title.style.color = '#22c55e';
+            desc.innerHTML = 'Töltéskor a külső töltő (pl. MPPT napelemes töltő vagy inverter) feszültsége kényszeríti az <strong>elektronokat (e⁻)</strong> a katódtól az anód felé. Eközben a <strong>lítium-ionok (Li⁺)</strong> kilépnek a katód kristályrácsából, átúsznak a szeparátoron, és beépülnek (interkalálódnak) a grafit anód rétegei közé.';
+            eq.innerHTML = 'Katód (+): LiFePO₄ → FePO₄ + Li⁺ + e⁻ &nbsp;&nbsp;|&nbsp;&nbsp; Anód (-): C₆ + Li⁺ + e⁻ → LiC₆';
+        } else {
+            title.innerText = '⏸️ Nyugalmi állapot (Üresjárat / OCV)';
+            title.style.color = '#38bdf8';
+            desc.innerHTML = 'Nyugalmi állapotban a külső áramkör szakadt. Nincs elektronáramlás a vezetékben, így az elektrolitban is leáll a lítium-ionok irányított vándorlása. A szeparátor megakadályozza, hogy az elektronok a cellán belül közvetlenül átjussanak (megelőzve a belső rövidzárlatot).';
+            eq.innerHTML = 'Egyensúlyi állapot: I = 0 A (Nincs nettó töltésátmenet)';
+        }
+    }
+
+    function getCellVoltage(socVal, currentMode) {
+        // Realisztikus LiFePO4 karakterisztika közelítés
+        let baseV = 3.22 + 0.08 * (socVal / 100);
+        if (socVal < 15) baseV -= (15 - socVal) * 0.025;
+        if (socVal > 90) baseV += (socVal - 90) * 0.022;
+
+        if (currentMode === 'charge') baseV += 0.08 * (currentAmps / 50);
+        if (currentMode === 'discharge') baseV -= 0.08 * (currentAmps / 50);
+
+        return Math.max(2.60, Math.min(3.65, baseV));
+    }
+
+    function updateTelemetry() {
+        document.getElementById('socLabel').innerText = `${Math.round(soc)}%`;
+        document.getElementById('socSlider').value = soc;
+
+        const cellV = getCellVoltage(soc, mode);
+        const packV = cellV * 16;
+        document.getElementById('voltValue').innerText = `${cellV.toFixed(2)} V / ${packV.toFixed(1)} V`;
+
+        const powerKw = (mode === 'idle') ? 0 : (packV * currentAmps) / 1000;
+        document.getElementById('powerValue').innerText = `${powerKw.toFixed(2)} kW`;
+
+        // 1 kWh = 42.64 ug elektron (48V-on). Egy 5.12 kWh-s packban:
+        // Aktuális tárolt energia alapú megmozgatott elektron tömeg a főkábelen:
+        const storedKwh = 5.12 * (soc / 100);
+        const eMassUg = storedKwh * 42.64;
+        const liMassG = storedKwh * 8.62; // 16 cellában összesen
+
+        document.getElementById('electronMassValue').innerText = `${eMassUg.toFixed(1)} µg`;
+        document.getElementById('ionMassValue').innerText = `${liMassG.toFixed(1)} g`;
+    }
+
+    // Pozíció kiszámítása a vezeték mentén (0.0 = Anód, 1.0 = Katód)
+    function getPointOnWire(t) {
+        // 3 szakasz: fel (75px), vízszintesen (340px), le (75px) -> Össz: 490px
+        const totalLen = 75 + 340 + 75;
+        let d = t * totalLen;
+
+        if (d <= 75) {
+            return { x: 180, y: 120 - d };
+        } else if (d <= 75 + 340) {
+            return { x: 180 + (d - 75), y: 45 };
+        } else {
+            return { x: 520, y: 45 + (d - 415) };
+        }
+    }
+
+    function drawBattery() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Elektrolit háttér (cellatest)
+        ctx.fillStyle = '#111c2d';
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(80, CELL_TOP, 540, CELL_BOTTOM - CELL_TOP, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        // 2. Áramgyűjtők (Réz a bal oldalon, Alumínium a jobb oldalon)
+        // Réz (Anód áramgyűjtő)
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(85, CELL_TOP + 8, 16, CELL_BOTTOM - CELL_TOP - 16);
+        // Alumínium (Katód áramgyűjtő)
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(599, CELL_TOP + 8, 16, CELL_BOTTOM - CELL_TOP - 16);
+
+        // 3. Anód (Grafit rétegek)
+        ctx.fillStyle = '#334155';
+        for (let r = 0; r < 5; r++) {
+            const y = CELL_TOP + 30 + r * 48;
+            ctx.fillRect(ANODE_X, y, ANODE_W, 24);
+            ctx.strokeStyle = '#64748b';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(ANODE_X, y, ANODE_W, 24);
+        }
+
+        // 4. Katód (LiFePO4 kristályrács)
+        ctx.fillStyle = '#1e3a8a';
+        for (let r = 0; r < 5; r++) {
+            const y = CELL_TOP + 30 + r * 48;
+            ctx.fillRect(CATHODE_X, y, CATHODE_W, 24);
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(CATHODE_X, y, CATHODE_W, 24);
+        }
+
+        // 5. Szeparátor középen
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath();
+        ctx.moveTo(SEP_X, CELL_TOP + 6);
+        ctx.lineTo(SEP_X, CELL_BOTTOM - 6);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Feliratok a cellán belül
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ANÓD (-) Grafit (C₆)', ANODE_X + ANODE_W / 2, CELL_BOTTOM + 22);
+        ctx.fillText('KATÓD (+) LiFePO₄', CATHODE_X + CATHODE_W / 2, CELL_BOTTOM + 22);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillText('Szeparátor', SEP_X, CELL_BOTTOM + 22);
+
+        // 6. Külső áramkör (vezeték)
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(180, CELL_TOP);
+        ctx.lineTo(180, 45);
+        ctx.lineTo(520, 45);
+        ctx.lineTo(520, CELL_TOP);
+        ctx.stroke();
+
+        // 7. Középső külső egység (Fogyasztó / Töltő)
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = (mode === 'discharge') ? '#f59e0b' : (mode === 'charge' ? '#22c55e' : '#64748b');
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(285, 16, 130, 56, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 13px sans-serif';
+        if (mode === 'discharge') {
+            ctx.fillText('💡 FOGYASZTÓ', 350, 40);
+            ctx.fillStyle = '#f59e0b';
+            ctx.font = '11px sans-serif';
+            ctx.fillText('Inverter / Terhelés', 350, 58);
+        } else if (mode === 'charge') {
+            ctx.fillText('🔌 TÖLTŐFORRÁS', 350, 40);
+            ctx.fillStyle = '#22c55e';
+            ctx.font = '11px sans-serif';
+            ctx.fillText('MPPT / Töltő', 350, 58);
+        } else {
+            ctx.fillText('⏸️ SZAKADT KÖR', 350, 40);
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '11px sans-serif';
+            ctx.fillText('Nincs áramfolyás', 350, 58);
+        }
+
+        // 8. Lítium-ionok (Li+) kirajzolása és mozgatása
+        const anodeCount = Math.round((soc / 100) * TOTAL_IONS);
+
+        for (let i = 0; i < TOTAL_IONS; i++) {
+            const row = Math.floor(i / 8);
+            const col = i % 8;
+
+            const anodeSlotX = ANODE_X + 14 + col * 16;
+            const anodeSlotY = CELL_TOP + 42 + row * 48;
+
+            const cathodeSlotX = CATHODE_X + 14 + col * 16;
+            const cathodeSlotY = CELL_TOP + 42 + row * 48;
+
+            let x, y;
+
+            // Átmenetben lévő ionok animálása az elektrolitban
+            if (mode !== 'idle' && Math.abs(i - anodeCount) <= 2) {
+                const speedFactor = (currentAmps / 100) * 0.035;
+                ions[i].transitProgress += (mode === 'discharge') ? speedFactor : -speedFactor;
+                if (ions[i].transitProgress > 1) ions[i].transitProgress -= 1;
+                if (ions[i].transitProgress < 0) ions[i].transitProgress += 1;
+
+                const t = ions[i].transitProgress;
+                x = anodeSlotX + (cathodeSlotX - anodeSlotX) * t;
+                y = anodeSlotY + Math.sin(t * Math.PI * 2) * 8;
+            } else if (i < anodeCount) {
+                x = anodeSlotX;
+                y = anodeSlotY;
+            } else {
+                x = cathodeSlotX;
+                y = cathodeSlotY;
+            }
+
+            // Li+ kör
+            ctx.fillStyle = '#22c55e';
+            ctx.beginPath();
+            ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#052e16';
+            ctx.font = 'bold 8px sans-serif';
+            ctx.fillText('Li⁺', x, y + 3);
+        }
+
+        // 9. Elektronok (e-) mozgatása és kirajzolása a vezetéken
+        const eSpeed = (mode === 'idle') ? 0 : (currentAmps / 100) * 0.012;
+
+        for (let e of electrons) {
+            if (mode === 'discharge' && soc > 0) {
+                e.progress += eSpeed;
+                if (e.progress > 1) e.progress -= 1;
+            } else if (mode === 'charge' && soc < 100) {
+                e.progress -= eSpeed;
+                if (e.progress < 0) e.progress += 1;
+            }
+
+            const pos = getPointOnWire(e.progress);
+
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#082f49';
+            ctx.font = 'bold 8px sans-serif';
+            ctx.fillText('-', pos.x, pos.y + 3);
+        }
+    }
+
+    // Fő animációs ciklus
+    function animate() {
+        if (mode === 'discharge' && soc > 0) {
+            soc = Math.max(0, soc - (currentAmps * 0.0012));
+            updateTelemetry();
+            if (soc === 0) setMode('idle');
+        } else if (mode === 'charge' && soc < 100) {
+            soc = Math.min(100, soc + (currentAmps * 0.0012));
+            updateTelemetry();
+            if (soc === 100) setMode('idle');
+        }
+
+        drawBattery();
+        requestAnimationFrame(animate);
+    }
+
+    // Indítás
+    updateTelemetry();
+    animate();
+</script>
+
+</body>
+</html>

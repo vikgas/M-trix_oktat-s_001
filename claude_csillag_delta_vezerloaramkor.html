@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Csillag-Delta Vezérlőáramkör</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #060612;
+  font-family: 'Courier New', monospace;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 16px 10px; min-height: 100vh;
+}
+h1 {
+  color: #5a9cd8; font-size: 13px; letter-spacing: 2.5px;
+  margin-bottom: 14px; text-align: center; text-transform: uppercase;
+}
+.wrap { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+#sv { background: #040410; border: 1px solid #111830; border-radius: 8px; display: block;
+      box-shadow: 0 0 60px rgba(0,0,0,.8), inset 0 0 40px rgba(0,0,30,.3); cursor: default; }
+.panel { background: #040410; border: 1px solid #111830; border-radius: 8px; padding: 14px; width: 196px;
+         box-shadow: 0 0 40px rgba(0,0,0,.7); }
+.pt { color: #5a9cd8; font-size: 10px; font-weight: bold; letter-spacing: 2px; margin-bottom: 9px; text-transform: uppercase; }
+.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 11px; color: #3a5a7a; }
+.led { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: #101828; transition: all .12s; border: 1px solid #1a2a3a; }
+.led.g  { background: #00d870; box-shadow: 0 0 9px #00d870; border-color: #00d870; }
+.led.y  { background: #ffc800; box-shadow: 0 0 9px #ffc800; border-color: #ffc800; }
+.led.r  { background: #ff2244; box-shadow: 0 0 9px #ff2244; border-color: #ff2244; }
+.led.b  { background: #4488ff; box-shadow: 0 0 9px #4488ff; border-color: #4488ff; }
+hr { border: none; border-top: 1px solid #111830; margin: 10px 0; }
+.mbox { background: #020208; border: 1px solid #111830; border-radius: 6px; padding: 10px;
+        text-align: center; margin-top: 8px; }
+.mbox .ic { font-size: 22px; margin-bottom: 3px; }
+#ms { font-size: 11px; color: #1e3050; letter-spacing: .5px; transition: color .2s; }
+#ms.Y { color: #ffc800; font-weight: bold; }
+#ms.D { color: #00d870; font-weight: bold; }
+#ms.F { color: #ff2244; font-weight: bold; }
+.gear { display: inline-block; transition: transform .4s; }
+.gear.spin1 { animation: spin 2s linear infinite; }
+.gear.spin2 { animation: spin .7s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.btn { width: 100%; padding: 8px; margin-top: 7px; border: 1px solid #1a2a3e; border-radius: 4px;
+       cursor: pointer; font-family: inherit; font-size: 10px; letter-spacing: 1.5px;
+       text-transform: uppercase; transition: background .12s; }
+.b1 { background: #081a2e; color: #5a9cd8; } .b1:hover { background: #0c2440; }
+.b2 { background: #1e0810; color: #ff6677; } .b2:hover { background: #2a1020; }
+.hint { font-size: 10px; color: #1c2e42; margin-top: 10px; line-height: 1.75; }
+.hint b { color: #2e4e68; }
+</style>
+</head>
+<body>
+<h1>⚡ Csillag–Delta Indítás · Kézi Vezérlőáramkör</h1>
+<div class="wrap">
+  <svg id="sv" width="550" height="780" viewBox="0 0 550 780"></svg>
+  <div class="panel">
+    <div class="pt">Kontaktorok</div>
+    <div class="row"><div class="led" id="lKM1"></div><span>KM1 Fővonal <b id="vKM1">KI</b></span></div>
+    <div class="row"><div class="led" id="lKM2"></div><span>KM2 Delta Δ <b id="vKM2">KI</b></span></div>
+    <div class="row"><div class="led" id="lKM3"></div><span>KM3 Csillag Y <b id="vKM3">KI</b></span></div>
+    <hr>
+    <div class="pt">Nyomógombok</div>
+    <div class="row"><div class="led g" id="lF3"></div><span>F3 – Termikus (NC)</span></div>
+    <div class="row"><div class="led g" id="lKi"></div><span>Ki – Stop (NC)</span></div>
+    <div class="row"><div class="led" id="lS2"></div><span>S2 – Start (NO)</span></div>
+    <div class="row"><div class="led g" id="lS3"></div><span>S3 – Y→Δ (NC)</span></div>
+    <div class="mbox">
+      <div class="ic"><span class="gear" id="gearEl">⚙️</span></div>
+      <div id="ms">MOTOR: LEÁLLVA</div>
+    </div>
+    <button class="btn b1" onclick="doReset()">↺ Reset / Visszaállítás</button>
+    <button class="btn b2" onclick="doFault()">⚡ F3 Hiba szimulálás</button>
+    <div class="hint">
+      <b>Kezelési sorrend:</b><br>
+      1. Kattints <b>[S2]</b>-re<br>
+      &nbsp;&nbsp;→ Csillag (Y) indítás<br>
+      2. Kattints <b>[S3]</b>-ra<br>
+      &nbsp;&nbsp;→ Delta (Δ) átváltás<br>
+      3. Kattints <b>[Ki]</b>-re<br>
+      &nbsp;&nbsp;→ Leállítás<br><br>
+      A gombok nyomva tarthatók!<br>
+      Csomópontok sárgán jelzik<br>
+      a feszültséget.
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  CIRCUIT STATE & LOGIC
+// ═══════════════════════════════════════════════
+const S = { f3:false, ki:true, s2:false, s3:true, km1:false, km2:false, km3:false };
+const N = {};   // node voltages
+
+function compute() {
+  // Iterative solver – resolves self-hold & interlock races
+  for (let i = 0; i < 6; i++) {
+    const [p1,p2,p3] = [S.km1, S.km2, S.km3];
+    N.A    = !S.f3 && S.ki;
+    N.B    = N.A && (S.s2 || p1 || p2);      // S2(NO) or self-hold
+    N.aS3  = N.B && S.s3;                    // through S3(NC)
+    N.aKM2 = N.aS3 && !p2;                  // through KM2-aux(NC) → star interlock
+    N.aKM3 = N.B  && !p3;                   // through KM3-aux(NC) → delta interlock
+    S.km1  = N.B;                            // KM1 energised directly from NodeB
+    S.km3  = N.aKM2;                         // KM3 star
+    S.km2  = N.aKM3 && !S.km3;             // KM2 delta (KM3 has priority)
+    if (S.km1===p1 && S.km2===p2 && S.km3===p3) break;
+  }
+  // Recompute final node values for drawing
+  N.sh   = N.A && S.km1;                    // self-hold path (KM1-aux NO)
+  N.B    = N.A && (S.s2 || S.km1 || S.km2);
+  N.aS3  = N.B && S.s3;
+  N.aKM2 = N.aS3 && !S.km2;
+  N.aKM3 = N.B  && !S.km3;
+}
+
+// ═══════════════════════════════════════════════
+//  SVG DRAWING ENGINE
+// ═══════════════════════════════════════════════
+const sv  = document.getElementById('sv');
+const NS  = 'http://www.w3.org/2000/svg';
+
+function mk(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  if (attrs) for (const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+  (parent || sv).appendChild(e);
+  return e;
+}
+
+// Theme colours
+const HOT  = '#ffcc00';   // energised wire / node
+const COLD = '#162038';   // de-energised wire
+const COIL_ON  = '#ff9900';
+const COIL_OFF = '#162038';
+const LBUS = '#2a6ab8';   // L bus colour
+const NBUS = '#1e5040';   // N bus colour
+
+// ─── Primitives ─────────────────────────────────
+function line(x1,y1,x2,y2,hot,w) {
+  mk('line',{x1,y1,x2,y2,
+    stroke:hot?HOT:COLD,
+    'stroke-width': hot?(w||2.6):(w||1.8),
+    'stroke-linecap':'round'});
+}
+function dot(cx,cy,hot,r) {
+  const e = mk('circle',{cx,cy,r:r||5,
+    fill: hot?HOT:COLD,
+    stroke: hot?'#ffe080':'#1e3050',
+    'stroke-width':1.5});
+  if (hot) e.setAttribute('filter','url(#gl)');
+}
+function txt(x,y,s,fill,sz,anch,bold) {
+  const e = mk('text',{x,y,
+    fill:fill||'#3a5a7a',
+    'font-size':sz||10,
+    'text-anchor':anch||'middle',
+    'font-family':'Courier New,monospace',
+    'font-weight':bold?'bold':'normal',
+    'dominant-baseline':'middle'});
+  e.textContent = s; return e;
+}
+
+// ─── Contact symbol ──────────────────────────────
+// type: 'NC'|'NO'   closed: bool   hotBefore: bool
+function contact(x, y1, y2, label, type, closed, hotBefore, small) {
+  const cy = (y1+y2)/2;
+  const H  = small ? 11 : 15;   // half arm-gap
+  const SB = small ? 7  : 10;   // stub width
+  const hotAfter = hotBefore && closed;
+  const armCol   = hotAfter ? HOT : (closed ? '#44cc88' : '#3a5570');
+
+  // Lead wires
+  line(x, y1, x, cy-H, hotBefore);
+  line(x, cy+H, x, y2, hotAfter);
+
+  // Terminal stubs
+  line(x-SB, cy-H, x+SB, cy-H, hotBefore, small?1.6:2);
+  line(x-SB, cy+H, x+SB, cy+H, hotAfter,  small?1.6:2);
+
+  // Terminal circles
+  mk('circle',{cx:x,cy:cy-H,r:small?2.5:3.5,
+    fill:hotBefore?HOT:COLD, stroke:hotBefore?HOT:'#1e3050','stroke-width':1});
+  mk('circle',{cx:x,cy:cy+H,r:small?2.5:3.5,
+    fill:hotAfter?HOT:COLD,  stroke:hotAfter?HOT:'#1e3050','stroke-width':1});
+
+  // Pin numbers
+  const [pt,pb] = type==='NC' ? ['21','22'] : ['13','14'];
+  if (!small) {
+    txt(x-SB-12, cy-H, pt, '#2e4060', 9);
+    txt(x-SB-12, cy+H, pb, '#2e4060', 9);
+  }
+
+  // NC indicator bar (above top terminal)
+  if (type === 'NC') {
+    mk('line',{x1:x-(small?4:6),y1:cy-H-(small?6:8),
+               x2:x+(small?4:6),y2:cy-H-(small?6:8),
+               stroke:'#3a5570','stroke-width':small?1.5:2,'stroke-linecap':'round'});
+  }
+
+  // Contact arm
+  if (closed) {
+    mk('line',{x1:x-SB,y1:cy-H, x2:x+SB,y2:cy+H,
+      stroke:armCol,'stroke-width':small?2.2:2.8,'stroke-linecap':'round'});
+  } else {
+    mk('line',{x1:x-SB,y1:cy-H, x2:x+(SB+3),y2:cy-(H-4),
+      stroke:armCol,'stroke-width':small?2:2.5,'stroke-linecap':'round'});
+  }
+
+  // Label
+  if (label) {
+    const labX = x + SB + (small?12:18);
+    txt(labX, cy, label, hotAfter?'#cce4ff':hotBefore?'#4a7a9a':'#2e4a64',
+        small?9:12, 'start', !small && hotAfter);
+  }
+}
+
+// ─── Coil symbol ─────────────────────────────────
+function coil(x, yTop, label, active) {
+  const col = active ? COIL_ON : COIL_OFF;
+  txt(x-14, yTop-5, 'A1', '#1e3450', 9, 'start');
+  const rct = mk('rect',{x:x-14,y:yTop,width:28,height:28,
+    fill:active?'rgba(255,140,0,.15)':'rgba(4,4,16,.9)',
+    stroke:col,'stroke-width':active?2.2:1.8,rx:3});
+  if (active) rct.setAttribute('filter','url(#gl)');
+  // Coil wire symbol
+  mk('line',{x1:x-10,y1:yTop+5,  x2:x+10,y2:yTop+23,stroke:col,'stroke-width':1.8});
+  txt(x-14, yTop+42, 'A2', '#1e3450', 9, 'start');
+  txt(x+22, yTop+14, label, active?'#ffe090':col, active?13:11, 'start', active);
+}
+
+// ─── Clickable overlay ───────────────────────────
+function addBtn(x,cy,w,h,handler) {
+  const g = mk('g',{cursor:'pointer', style:'user-select:none'});
+  mk('rect',{x:x-w/2,y:cy-h/2,width:w,height:h,
+    fill:'transparent',stroke:'#203050','stroke-width':1,rx:3},g);
+  const on = () => handler(true), off = () => handler(false);
+  g.addEventListener('mousedown', e=>{e.preventDefault();on();});
+  g.addEventListener('mouseup',  off);
+  g.addEventListener('mouseleave',off);
+  g.addEventListener('touchstart',e=>{e.preventDefault();on();});
+  g.addEventListener('touchend',  e=>{e.preventDefault();off();});
+}
+
+// Button pressed highlight
+function btnHi(x,cy,w,h,fill,stroke) {
+  mk('rect',{x:x-w/2,y:cy-h/2,width:w,height:h,
+    fill,stroke,'stroke-width':1.5,rx:3,'pointer-events':'none'});
+}
+
+// ═══════════════════════════════════════════════
+//  LAYOUT
+// ═══════════════════════════════════════════════
+const P = {
+  // X columns
+  xKM3: 105,    // KM3 (csillag) branch
+  xM:   248,    // main spine
+  xSH:  388,    // self-hold (KM1-aux NO)
+  xKM2: 442,    // KM2 (delta) branch
+
+  // Y rows
+  yL: 48,                           // L bus
+
+  yF3a: 83,   yF3b: 141,           // F3 NC
+  yKia: 170,  yKib: 228,           // Ki NC  (stop)
+  yNA:  256,                        // Node A
+  yS2a: 284,  yS2b: 342,           // S2 NO  (start)
+  yNB:  370,                        // Node B
+
+  ySHa: 285,  ySHb: 342,           // KM1-aux self-hold (parallel with S2)
+
+  // Left branch – KM3 star path
+  yS3a:    408,  yS3b:    464,     // S3 NC  (Y→Δ)
+  yKM2nca: 490,  yKM2ncb: 546,    // KM2-aux NC  (star interlock)
+  yKM3coil: 598,
+
+  // Middle branch – KM1 main (direct)
+  yKM1coil: 598,
+
+  // Right branch – KM2 delta path
+  yKM3nca: 408,  yKM3ncb: 464,    // KM3-aux NC  (delta interlock)
+  yKM2coil: 598,
+
+  yN: 730,                          // N bus
+};
+
+// ═══════════════════════════════════════════════
+//  MAIN DRAW
+// ═══════════════════════════════════════════════
+function draw() {
+  sv.innerHTML = '';
+
+  // ── Defs: glow filter ──
+  const defs = mk('defs');
+  const flt  = mk('filter',{id:'gl',x:'-40%',y:'-40%',width:'180%',height:'180%'},defs);
+  const blur = mk('feGaussianBlur',{stdDeviation:'3',result:'cb'},flt);
+  const mg   = mk('feMerge',{},flt);
+  mk('feMergeNode',{in:'cb'},mg);
+  mk('feMergeNode',{in:'SourceGraphic'},mg);
+
+  const n=N, s=S;
+
+  // background
+  mk('rect',{x:0,y:0,width:550,height:780,fill:'#040410'});
+
+  // circuit title
+  txt(275, 22, 'Csillag-delta indítás · kézi vezérléssel', '#1c3254', 10);
+
+  // ═══ BUS BARS ═══════════════════════════════
+  mk('line',{x1:50,y1:P.yL,x2:510,y2:P.yL,stroke:LBUS,'stroke-width':4,'stroke-linecap':'round'});
+  txt(30,P.yL,'L',LBUS,15,'start',true);
+  mk('line',{x1:50,y1:P.yN,x2:510,y2:P.yN,stroke:NBUS,'stroke-width':4,'stroke-linecap':'round'});
+  txt(30,P.yN,'N',NBUS,15,'start',true);
+
+  // ═══ MAIN SPINE: L → F3 → Ki → NodeA → S2 → NodeB ═══
+  line(P.xM, P.yL, P.xM, P.yF3a, true);
+
+  // F3 (NC – termikus relé)
+  contact(P.xM, P.yF3a, P.yF3b, 'F3', 'NC', !s.f3, true);
+
+  line(P.xM, P.yF3b, P.xM, P.yKia, !s.f3);
+
+  // Ki (NC – stop) — INTERACTIVE
+  contact(P.xM, P.yKia, P.yKib, 'Ki', 'NC', s.ki, !s.f3);
+  addBtn(P.xM,(P.yKia+P.yKib)/2,46,62, p=>{ S.ki=!p; update(); });
+  if (!s.ki)
+    btnHi(P.xM,(P.yKia+P.yKib)/2,46,62,'rgba(255,50,50,.09)','#ff4455');
+
+  line(P.xM, P.yKib, P.xM, P.yNA, n.A);
+
+  // Node A
+  dot(P.xM, P.yNA, n.A);
+  txt(P.xM-18, P.yNA, 'A', '#1e3456', 9);
+
+  line(P.xM, P.yNA, P.xM, P.yS2a, n.A);
+
+  // S2 (NO – start) — INTERACTIVE
+  contact(P.xM, P.yS2a, P.yS2b, 'S2', 'NO', s.s2, n.A);
+  addBtn(P.xM,(P.yS2a+P.yS2b)/2,46,62, p=>{ S.s2=p; update(); });
+  if (s.s2)
+    btnHi(P.xM,(P.yS2a+P.yS2b)/2,46,62,'rgba(0,220,120,.08)','#44cc88');
+
+  line(P.xM, P.yS2b, P.xM, P.yNB, n.A && s.s2);
+
+  // ═══ SELF-HOLD: NodeA → KM1-aux(NO) → NodeB ═══
+  line(P.xM,  P.yNA, P.xSH, P.yNA, n.A);        // horizontal to SH column
+  line(P.xSH, P.yNA, P.xSH, P.ySHa, n.A);       // down to contact top
+  contact(P.xSH, P.ySHa, P.ySHb, 'KM1', 'NO', s.km1, n.A, true); // small
+  line(P.xSH, P.ySHb, P.xSH, P.yNB, n.sh);      // down to NodeB level
+  // junction dot where SH wire meets the NodeB horizontal
+  dot(P.xSH, P.yNB, n.B, 4.5);
+
+  // ═══ NODE B ═══
+  dot(P.xM, P.yNB, n.B);
+  txt(P.xM-18, P.yNB, 'B', '#1e3456', 9);
+
+  // Horizontal from NodeB to all three branches
+  line(P.xM, P.yNB, P.xKM3, P.yNB, n.B);        // left → KM3 branch
+  line(P.xM, P.yNB, P.xKM2, P.yNB, n.B);        // right → KM2 branch (passes through xSH)
+
+  dot(P.xKM3, P.yNB, n.B, 4.5);
+  dot(P.xKM2, P.yNB, n.B, 4.5);
+
+  // ═══ LEFT BRANCH: KM3 CSILLAG (STAR) ═══════
+  line(P.xKM3, P.yNB, P.xKM3, P.yS3a, n.B);
+
+  // S3 (NC – csillag→delta átváltó) — INTERACTIVE
+  contact(P.xKM3, P.yS3a, P.yS3b, 'S3', 'NC', s.s3, n.B);
+  addBtn(P.xKM3,(P.yS3a+P.yS3b)/2,46,62, p=>{ S.s3=!p; update(); });
+  if (!s.s3)
+    btnHi(P.xKM3,(P.yS3a+P.yS3b)/2,46,62,'rgba(255,200,0,.09)','#ffcc44');
+
+  line(P.xKM3, P.yS3b, P.xKM3, P.yKM2nca, n.aS3);
+  dot(P.xKM3, P.yS3b, n.aS3, 4.5);
+
+  // KM2-aux NC  (reteszelő kontaktus: delta nem futhat, ha csillag van)
+  contact(P.xKM3, P.yKM2nca, P.yKM2ncb, 'KM2', 'NC', !s.km2, n.aS3);
+
+  line(P.xKM3, P.yKM2ncb, P.xKM3, P.yKM3coil, n.aKM2);
+  dot(P.xKM3, P.yKM2ncb, n.aKM2, 4.5);
+
+  coil(P.xKM3, P.yKM3coil, 'KM3', s.km3);
+  line(P.xKM3, P.yKM3coil+28, P.xKM3, P.yN, false);
+
+  // ═══ MIDDLE BRANCH: KM1 FŐVONAL (MAIN) ═════
+  // Direct path: NodeB → KM1 coil (no intermediate contacts)
+  line(P.xM, P.yNB, P.xM, P.yKM1coil, n.B);
+  coil(P.xM, P.yKM1coil, 'KM1', s.km1);
+  line(P.xM, P.yKM1coil+28, P.xM, P.yN, false);
+
+  // ═══ RIGHT BRANCH: KM2 DELTA ════════════════
+  line(P.xKM2, P.yNB, P.xKM2, P.yKM3nca, n.B);
+
+  // KM3-aux NC  (reteszelő kontaktus: csillag nem futhat, ha delta van)
+  contact(P.xKM2, P.yKM3nca, P.yKM3ncb, 'KM3', 'NC', !s.km3, n.B);
+
+  line(P.xKM2, P.yKM3ncb, P.xKM2, P.yKM2coil, n.aKM3);
+  dot(P.xKM2, P.yKM3ncb, n.aKM3, 4.5);
+
+  coil(P.xKM2, P.yKM2coil, 'KM2', s.km2);
+  line(P.xKM2, P.yKM2coil+28, P.xKM2, P.yN, false);
+
+  // Faint N-bus join lines between coil verticals
+  mk('line',{x1:P.xKM3,y1:P.yN,x2:P.xKM2,y2:P.yN,
+    stroke:'#1a3a2e','stroke-width':1.5,'stroke-dasharray':'5,5'});
+
+  // ─── Leg / branch labels ────────────────────
+  txt(P.xKM3, P.yKM3coil+62, '← Csillag (Y)', '#204030', 9);
+  txt(P.xM,   P.yKM1coil+62, 'Fővonal',        '#204030', 9);
+  txt(P.xKM2, P.yKM2coil+62, 'Delta (Δ) →',   '#204030', 9);
+
+  // ─── Refresh side panel ─────────────────────
+  refreshPanel();
+}
+
+// ═══════════════════════════════════════════════
+//  PANEL REFRESH
+// ═══════════════════════════════════════════════
+function refreshPanel() {
+  const s = S;
+
+  setLed('KM1', s.km1?'g':'');  setVal('KM1', s.km1?'BE':'KI');
+  setLed('KM2', s.km2?'g':'');  setVal('KM2', s.km2?'BE':'KI');
+  setLed('KM3', s.km3?'y':'');  setVal('KM3', s.km3?'BE':'KI');
+
+  setLed('F3', s.f3?'r':'g');
+  setLed('Ki', s.ki?'g':'');
+  setLed('S2', s.s2?'b':'');
+  setLed('S3', s.s3?'g':'');
+
+  const ms   = document.getElementById('ms');
+  const gear = document.getElementById('gearEl');
+  if (s.f3) {
+    ms.textContent='⚠ F3 HIBA – KIOLDOTT'; ms.className='F';
+    gear.className='gear';
+  } else if (s.km1 && s.km3) {
+    ms.textContent='★ CSILLAG (Y) ÜZEM';  ms.className='Y';
+    gear.className='gear spin1';
+  } else if (s.km1 && s.km2) {
+    ms.textContent='▲ DELTA (Δ) ÜZEM';    ms.className='D';
+    gear.className='gear spin2';
+  } else {
+    ms.textContent='○ MOTOR: LEÁLLVA';    ms.className='';
+    gear.className='gear';
+  }
+}
+
+function setLed(id,cls) { document.getElementById('l'+id).className='led '+(cls||''); }
+function setVal(id,v)   { document.getElementById('v'+id).textContent=v; }
+
+// ═══════════════════════════════════════════════
+//  CONTROLS
+// ═══════════════════════════════════════════════
+function update()  { compute(); draw(); }
+function doReset() { Object.assign(S,{f3:false,ki:true,s2:false,s3:true,km1:false,km2:false,km3:false}); update(); }
+function doFault() { S.f3=true; update(); }
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if(e.key==='1'||e.key==='s') { S.s2=true;  update(); }
+  if(e.key==='2'||e.key==='d') { S.s3=false; update(); }
+  if(e.key==='0'||e.key==='k') { S.ki=false; update(); }
+  if(e.key==='r') doReset();
+  if(e.key==='f') doFault();
+});
+document.addEventListener('keyup', e => {
+  if(e.key==='1'||e.key==='s') { S.s2=false; update(); }
+  if(e.key==='2'||e.key==='d') { S.s3=true;  update(); }
+  if(e.key==='0'||e.key==='k') { S.ki=true;  update(); }
+});
+
+// Init
+update();
+</script>
+</body>
+</html>

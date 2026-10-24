@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="hu" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Villogtatás Vezérlő Áramkör (2+2 Változat) – Interaktív Áramút-rajz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        /* CAD / Blueprint Grid Background for SVG */
+        .cad-grid {
+            background-color: #0b1120;
+            background-image: 
+                linear-gradient(to right, rgba(30, 41, 59, 0.5) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(30, 41, 59, 0.5) 1px, transparent 1px),
+                linear-gradient(to right, rgba(51, 65, 85, 0.4) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(51, 65, 85, 0.4) 1px, transparent 1px);
+            background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+        }
+
+        /* Wire styling & animations */
+        .wire {
+            fill: none;
+            stroke: #475569;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: stroke 0.15s ease, filter 0.15s ease;
+        }
+        .wire-live {
+            stroke: #ef4444 !important;
+            stroke-width: 3;
+            filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.75));
+        }
+        .wire-flow {
+            stroke-dasharray: 8 6;
+            animation: flowAnim 0.6s linear infinite;
+        }
+        .wire-neutral {
+            fill: none;
+            stroke: #3b82f6;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.4));
+        }
+        @keyframes flowAnim {
+            from { stroke-dashoffset: 14; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Contact blade transition */
+        .contact-blade {
+            transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.15s ease;
+        }
+
+        /* Interactive SVG elements hover */
+        .svg-interactive {
+            cursor: pointer;
+        }
+        .svg-interactive:hover .hitbox {
+            fill: rgba(255, 255, 255, 0.06);
+            stroke: rgba(148, 163, 184, 0.4);
+        }
+
+        /* Lamp glow animations */
+        .lamp-glow-amber {
+            filter: drop-shadow(0 0 14px #f59e0b) drop-shadow(0 0 28px #d97706);
+        }
+        .lamp-glow-green {
+            filter: drop-shadow(0 0 14px #10b981) drop-shadow(0 0 28px #059669);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-red-500 selection:text-white">
+
+    <!-- HEADER -->
+    <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-30 px-4 py-3">
+        <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-mono font-bold text-lg shadow-inner">
+                    2+2
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2 flex-wrap">
+                        Villogtatás Vezérlő Áramkör (2+2 Változat)
+                        <span class="text-xs font-mono uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">2 Mágneskapcsoló + 2 Időrelé</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Optimalizált ipari kapcsolás • KM1 (Főrelé), KM2 (Váltórelé) &amp; T1, T2 (Astabil időrelé pár)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button id="btn-flow-toggle" onclick="toggleFlowAnimation()" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5">
+                    <span id="flow-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    Áramirány animáció
+                </button>
+                <button onclick="toggleWiringModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition flex items-center gap-1.5 shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    Kötési lista &amp; 2+2 Összehasonlítás
+                </button>
+                <button onclick="resetCircuit()" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-red-950/60 hover:text-red-300 hover:border-red-800/50 text-slate-300 border border-slate-700 transition">
+                    Alaphelyzet
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 md:p-5 grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+
+        <!-- LEFT / TOP CONTROL PANEL (4 columns on XL) -->
+        <section class="xl:col-span-4 flex flex-col gap-4 order-2 xl:order-1">
+
+            <!-- LIVE STATUS EXPLANATION CARD -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <span id="status-led" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Jelenlegi állapot (2+2 logika)
+                    </span>
+                    <span id="status-badge" class="text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">KÉSZENLÉT</span>
+                </div>
+                <h2 id="status-title" class="text-base font-bold text-white mb-1">Áramkör feszültség alatt, indításra kész</h2>
+                <p id="status-desc" class="text-xs text-slate-300 leading-relaxed">
+                    A védelmi készülékek (Q0, F1, GV2) be vannak kapcsolva. A fázis a piros <strong>STOP (1–2)</strong> gombon keresztül várakozik a zöld <strong>START (3–4)</strong> gomb és a <strong>KM1 (13–14)</strong> öntartó érintkező előtt.
+                </p>
+            </div>
+
+            <!-- PHYSICAL OPERATOR PANEL (Switches, Buttons, Lamps) -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <h3 class="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold">Kezelőpult (Fizikai készülékek)</h3>
+                    <span class="text-[11px] text-slate-500">Kattints a kapcsolókra!</span>
+                </div>
+
+                <!-- Protection Devices Row -->
+                <div class="grid grid-cols-3 gap-2.5">
+                    <!-- FI-relé -->
+                    <button id="ctrl-q0" onclick="toggleProtection('Q0')" class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between bg-slate-800/90 border-emerald-500/40 hover:border-emerald-400">
+                        <div class="flex items-center justify-between w-full mb-1.5">
+                            <span class="font-mono text-xs font-bold text-white">Q0</span>
+                            <span id="badge-q0" class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/20 text-emerald-300">BE</span>
+                        </div>
+                        <div class="text-[11px] font-medium text-slate-300 leading-tight">FI-relé (ÁVK)</div>
+                        <div class="text-[10px] text-slate-500 font-mono mt-0.5">1–2, 3–4</div>
+                    </button>
+
+                    <!-- Kismegszakító -->
+                    <button id="ctrl-f1" onclick="toggleProtection('F1')" class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between bg-slate-800/90 border-emerald-500/40 hover:border-emerald-400">
+                        <div class="flex items-center justify-between w-full mb-1.5">
+                            <span class="font-mono text-xs font-bold text-white">F1</span>
+                            <span id="badge-f1" class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/20 text-emerald-300">BE</span>
+                        </div>
+                        <div class="text-[11px] font-medium text-slate-300 leading-tight">Kismegszakító</div>
+                        <div class="text-[10px] text-slate-500 font-mono mt-0.5">B6A (1–2)</div>
+                    </button>
+
+                    <!-- GV2 Motorvédő -->
+                    <button id="ctrl-gv2" onclick="toggleProtection('GV2')" class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between bg-slate-800/90 border-emerald-500/40 hover:border-emerald-400">
+                        <div class="flex items-center justify-between w-full mb-1.5">
+                            <span class="font-mono text-xs font-bold text-white">GV2</span>
+                            <span id="badge-gv2" class="px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/20 text-emerald-300">BE</span>
+                        </div>
+                        <div class="text-[11px] font-medium text-slate-300 leading-tight">Motorvédő</div>
+                        <div class="text-[10px] text-slate-500 font-mono mt-0.5">NO 13–14</div>
+                    </button>
+                </div>
+
+                <!-- Pushbuttons (STOP / START) -->
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <!-- Piros STOP Gomb -->
+                    <button id="btn-stop"
+                        onmousedown="pressStop(true)" onmouseup="pressStop(false)" onmouseleave="pressStop(false)"
+                        ontouchstart="pressStop(true); return false;" ontouchend="pressStop(false); return false;"
+                        class="group relative overflow-hidden rounded-xl p-3.5 bg-gradient-to-b from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 active:scale-[0.98] border-2 border-red-400/50 shadow-lg shadow-red-950/50 flex items-center gap-3 transition select-none">
+                        <div class="w-9 h-9 rounded-full bg-red-900/60 border-2 border-red-300 flex items-center justify-center shadow-inner shrink-0">
+                            <div class="w-4 h-4 rounded-full bg-red-400"></div>
+                        </div>
+                        <div class="text-left">
+                            <div class="text-sm font-bold text-white tracking-wide">STOP (S0)</div>
+                            <div class="text-[11px] font-mono text-red-200">NC 1–2 • Leállítás</div>
+                        </div>
+                    </button>
+
+                    <!-- Zöld START Gomb -->
+                    <button id="btn-start"
+                        onmousedown="pressStart(true)" onmouseup="pressStart(false)" onmouseleave="pressStart(false)"
+                        ontouchstart="pressStart(true); return false;" ontouchend="pressStart(false); return false;"
+                        class="group relative overflow-hidden rounded-xl p-3.5 bg-gradient-to-b from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 active:scale-[0.98] border-2 border-emerald-400/50 shadow-lg shadow-emerald-950/50 flex items-center gap-3 transition select-none">
+                        <div class="w-9 h-9 rounded-full bg-emerald-900/60 border-2 border-emerald-300 flex items-center justify-center shadow-inner shrink-0">
+                            <div class="w-4 h-4 rounded-full bg-emerald-300"></div>
+                        </div>
+                        <div class="text-left">
+                            <div class="text-sm font-bold text-white tracking-wide">START (S1)</div>
+                            <div class="text-[11px] font-mono text-emerald-200">NO 3–4 • Indítás</div>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Indicator Lamps H1 & H2 -->
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <div id="panel-lamp-h1" class="rounded-xl p-3 bg-slate-950 border border-slate-800 flex items-center gap-3 transition-all duration-200">
+                        <div id="lamp-orb-h1" class="w-10 h-10 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center font-mono text-xs font-bold text-slate-500 transition-all duration-150 shrink-0">
+                            H1
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-200">1. Lámpa (H1)</div>
+                            <div id="lamp-state-h1" class="text-[11px] font-mono text-slate-500">KM2 (21–22 NC)</div>
+                        </div>
+                    </div>
+
+                    <div id="panel-lamp-h2" class="rounded-xl p-3 bg-slate-950 border border-slate-800 flex items-center gap-3 transition-all duration-200">
+                        <div id="lamp-orb-h2" class="w-10 h-10 rounded-full bg-slate-800 border-2 border-slate-700 flex items-center justify-center font-mono text-xs font-bold text-slate-500 transition-all duration-150 shrink-0">
+                            H2
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-200">2. Lámpa (H2)</div>
+                            <div id="lamp-state-h2" class="text-[11px] font-mono text-slate-500">KM2 (13–14 NO)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TIMERS & COIL TELEMETRY CARD -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col gap-3.5">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h3 class="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold">Időrelék (T1, T2) és Mágneskapcsolók</h3>
+                    <span class="text-[11px] font-mono text-emerald-400">2+2 Konfiguráció</span>
+                </div>
+
+                <!-- T1 Slider -->
+                <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80">
+                    <div class="flex justify-between items-center text-xs mb-1.5">
+                        <span class="font-semibold text-slate-200 flex items-center gap-1.5">
+                            <span id="dot-t1" class="w-2 h-2 rounded-full bg-slate-600"></span>
+                            T1 időrelé (1. ütem / H1 ideje)
+                        </span>
+                        <span class="font-mono font-bold text-amber-400"><span id="val-t1-cur">0.0</span>s / <span id="val-t1-set">2.0</span>s</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
+                        <div id="bar-t1" class="h-full bg-amber-500 transition-all duration-75" style="width: 0%"></div>
+                    </div>
+                    <input type="range" id="slider-t1" min="0.5" max="5.0" step="0.1" value="2.0" oninput="updateTimerSetting('T1', this.value)" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg">
+                </div>
+
+                <!-- T2 Slider -->
+                <div class="bg-slate-950/70 p-3 rounded-xl border border-slate-800/80">
+                    <div class="flex justify-between items-center text-xs mb-1.5">
+                        <span class="font-semibold text-slate-200 flex items-center gap-1.5">
+                            <span id="dot-t2" class="w-2 h-2 rounded-full bg-slate-600"></span>
+                            T2 időrelé (2. ütem / H2 ideje)
+                        </span>
+                        <span class="font-mono font-bold text-emerald-400"><span id="val-t2-cur">0.0</span>s / <span id="val-t2-set">2.0</span>s</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
+                        <div id="bar-t2" class="h-full bg-emerald-500 transition-all duration-75" style="width: 0%"></div>
+                    </div>
+                    <input type="range" id="slider-t2" min="0.5" max="5.0" step="0.1" value="2.0" oninput="updateTimerSetting('T2', this.value)" class="w-full accent-emerald-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg">
+                </div>
+
+                <!-- 2+2 Coil Status Pills -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    <div id="pill-km1" class="px-2 py-2 rounded-lg bg-slate-950 border border-slate-800 text-center">
+                        <div class="text-[10px] font-mono text-slate-500">FŐRELÉ</div>
+                        <div class="text-xs font-mono font-bold text-slate-400 mt-0.5">KM1: KI</div>
+                    </div>
+                    <div id="pill-t1" class="px-2 py-2 rounded-lg bg-slate-950 border border-slate-800 text-center">
+                        <div class="text-[10px] font-mono text-slate-500">1. IDŐRELÉ</div>
+                        <div class="text-xs font-mono font-bold text-slate-400 mt-0.5">T1: KI</div>
+                    </div>
+                    <div id="pill-t2" class="px-2 py-2 rounded-lg bg-slate-950 border border-slate-800 text-center">
+                        <div class="text-[10px] font-mono text-slate-500">2. IDŐRELÉ</div>
+                        <div class="text-xs font-mono font-bold text-slate-400 mt-0.5">T2: KI</div>
+                    </div>
+                    <div id="pill-km2" class="px-2 py-2 rounded-lg bg-slate-950 border border-slate-800 text-center">
+                        <div class="text-[10px] font-mono text-slate-500">VÁLTÓRELÉ</div>
+                        <div class="text-xs font-mono font-bold text-slate-400 mt-0.5">KM2: KI</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT / MAIN SCHEMATIC CANVAS (8 columns on XL) -->
+        <section class="xl:col-span-8 order-1 xl:order-2 flex flex-col">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+                <!-- Schematic Top Bar -->
+                <div class="px-4 py-2.5 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center gap-4">
+                        <span class="font-mono font-semibold text-slate-300">2+2 ÁRAMÚT-RAJZ (1 – 7 ÁRAMUTAK)</span>
+                        <div class="flex items-center gap-3 text-[11px] text-slate-400">
+                            <span class="flex items-center gap-1"><span class="w-3 h-1 bg-red-500 inline-block rounded"></span> Fázis (230V AC)</span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-1 bg-blue-500 inline-block rounded"></span> Nulla (N)</span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-1 bg-slate-600 inline-block rounded"></span> Feszültségmentes</span>
+                        </div>
+                    </div>
+                    <span class="text-[11px] text-slate-400 italic">A rajzon lévő kapcsolókra és nyomógombokra közvetlenül is kattinthatsz!</span>
+                </div>
+
+                <!-- Interactive SVG Container -->
+                <div class="w-full overflow-x-auto cad-grid p-2 sm:p-4 flex justify-center">
+                    <svg id="schematic-svg" viewBox="0 0 1120 790" class="w-full max-w-[1120px] h-auto select-none font-mono">
+                        <!-- ================= CURRENT PATH NUMBERS (TOP BAR 1 - 7) ================= -->
+                        <g transform="translate(0, 12)">
+                            <rect x="75" y="0" width="985" height="24" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+                            <text x="120" y="16" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">1</text>
+                            <text x="230" y="16" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">2</text>
+                            <text x="380" y="16" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">3</text>
+                            <text x="550" y="16" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">4</text>
+                            <text x="700" y="16" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">5</text>
+                            <text x="860" y="16" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">6</text>
+                            <text x="1000" y="16" fill="#94a3b8" font-size="12" font-weight="bold" text-anchor="middle">7</text>
+
+                            <!-- Sub-labels explaining each path -->
+                            <text x="120" y="37" fill="#64748b" font-size="9" text-anchor="middle">Főrelé (KM1)</text>
+                            <text x="230" y="37" fill="#64748b" font-size="9" text-anchor="middle">Öntartás</text>
+                            <text x="380" y="37" fill="#fbbf24" font-size="9" text-anchor="middle">1. Időrelé (T1)</text>
+                            <text x="550" y="37" fill="#34d399" font-size="9" text-anchor="middle">2. Időrelé (T2)</text>
+                            <text x="700" y="37" fill="#38bdf8" font-size="9" text-anchor="middle">Váltórelé (KM2)</text>
+                            <text x="860" y="37" fill="#fbbf24" font-size="9" text-anchor="middle">1. Lámpa (NC)</text>
+                            <text x="1000" y="37" fill="#34d399" font-size="9" text-anchor="middle">2. Lámpa (NO)</text>
+                        </g>
+
+                        <!-- ================= TOP SUPPLY & PROTECTION LINE (Y = 75) ================= -->
+                        <text x="18" y="79" fill="#ef4444" font-size="13" font-weight="bold">L (230V)</text>
+                        <circle cx="80" cy="75" r="4" fill="#ef4444" />
+                        <path id="w-supply-in" d="M 80 75 L 135 75" class="wire wire-live wire-flow" />
+
+                        <!-- Q0: FI-relé -->
+                        <g class="svg-interactive" onclick="toggleProtection('Q0')">
+                            <rect x="125" y="48" width="68" height="45" rx="6" fill="transparent" stroke="transparent" class="hitbox"/>
+                            <text x="159" y="60" fill="#cbd5e1" font-size="10" font-weight="bold" text-anchor="middle">Q0 (FI)</text>
+                            <text x="130" y="88" fill="#64748b" font-size="9">1</text>
+                            <text x="183" y="88" fill="#64748b" font-size="9">2</text>
+                            <circle cx="135" cy="75" r="3" fill="#94a3b8"/>
+                            <circle cx="180" cy="75" r="3" fill="#94a3b8"/>
+                            <line id="svg-blade-q0" x1="135" y1="75" x2="180" y2="75" class="wire contact-blade" />
+                        </g>
+
+                        <path id="w-q0-f1" d="M 180 75 L 235 75" class="wire" />
+
+                        <!-- F1: Kismegszakító -->
+                        <g class="svg-interactive" onclick="toggleProtection('F1')">
+                            <rect x="225" y="48" width="68" height="45" rx="6" fill="transparent" stroke="transparent" class="hitbox"/>
+                            <text x="259" y="60" fill="#cbd5e1" font-size="10" font-weight="bold" text-anchor="middle">F1 (B6A)</text>
+                            <text x="230" y="88" fill="#64748b" font-size="9">1</text>
+                            <text x="283" y="88" fill="#64748b" font-size="9">2</text>
+                            <circle cx="235" cy="75" r="3" fill="#94a3b8"/>
+                            <circle cx="280" cy="75" r="3" fill="#94a3b8"/>
+                            <line id="svg-blade-f1" x1="235" y1="75" x2="280" y2="75" class="wire contact-blade" />
+                        </g>
+
+                        <path id="w-f1-gv2" d="M 280 75 L 335 75" class="wire" />
+
+                        <!-- GV2: Motorvédő segédérintkező (13-14 NO) -->
+                        <g class="svg-interactive" onclick="toggleProtection('GV2')">
+                            <rect x="325" y="48" width="68" height="45" rx="6" fill="transparent" stroke="transparent" class="hitbox"/>
+                            <text x="359" y="60" fill="#cbd5e1" font-size="10" font-weight="bold" text-anchor="middle">GV2</text>
+                            <text x="326" y="88" fill="#64748b" font-size="9">13</text>
+                            <text x="382" y="88" fill="#64748b" font-size="9">14</text>
+                            <circle cx="335" cy="75" r="3" fill="#94a3b8"/>
+                            <circle cx="380" cy="75" r="3" fill="#94a3b8"/>
+                            <line id="svg-blade-gv2" x1="335" y1="75" x2="380" y2="75" class="wire contact-blade" />
+                        </g>
+
+                        <!-- Wire from GV2(14) to Path 1 S0(1) -->
+                        <path id="w-main-to-s0" d="M 380 75 L 420 75 L 420 100 L 120 100 L 120 130" class="wire" />
+
+                        <!-- ================= PATH 1 & 2: S0 (STOP), S1 (START), KM1 HOLDING & KM1 COIL ================= -->
+                        <!-- S0: Piros STOP Nyomógomb (NC 1-2) -->
+                        <g class="svg-interactive"
+                           onmousedown="pressStop(true)" onmouseup="pressStop(false)" onmouseleave="pressStop(false)"
+                           ontouchstart="pressStop(true); return false;" ontouchend="pressStop(false); return false;">
+                            <rect x="75" y="122" width="85" height="56" rx="6" fill="transparent" stroke="transparent" class="hitbox"/>
+                            <text x="82" y="154" fill="#f87171" font-size="11" font-weight="bold">S0</text>
+                            <text x="128" y="128" fill="#94a3b8" font-size="10">1</text>
+                            <text x="128" y="178" fill="#94a3b8" font-size="10">2</text>
+                            <line x1="120" y1="130" x2="128" y2="130" stroke="#94a3b8" stroke-width="2"/>
+                            <circle cx="120" cy="130" r="3" fill="#94a3b8"/>
+                            <circle cx="120" cy="170" r="3" fill="#94a3b8"/>
+                            <!-- Actuator -->
+                            <line x1="98" y1="150" x2="122" y2="150" stroke="#f87171" stroke-width="1.5" stroke-dasharray="3 2"/>
+                            <path d="M 98 142 L 92 142 L 92 158 L 98 158" fill="none" stroke="#ef4444" stroke-width="2.5"/>
+                            <!-- Blade -->
+                            <line id="svg-blade-s0" x1="120" y1="170" x2="126" y2="130" class="wire contact-blade" />
+                        </g>
+
+                        <!-- Wire between S0(2) and S1(3) + Path 2 KM1(13) -->
+                        <path id="w-after-stop" d="M 120 170 L 120 235 M 120 200 L 230 200 L 230 235" class="wire" />
+                        <circle cx="120" cy="200" r="4" fill="#64748b" id="node-after-stop" />
+
+                        <!-- Path 1: S1 Zöld START Nyomógomb (NO 3-4) -->
+                        <g class="svg-interactive"
+                           onmousedown="pressStart(true)" onmouseup="pressStart(false)" onmouseleave="pressStart(false)"
+                           ontouchstart="pressStart(true); return false;" ontouchend="pressStart(false); return false;">
+                            <rect x="75" y="228" width="75" height="56" rx="6" fill="transparent" stroke="transparent" class="hitbox"/>
+                            <text x="80" y="260" fill="#34d399" font-size="11" font-weight="bold">S1</text>
+                            <text x="128" y="234" fill="#94a3b8" font-size="10">3</text>
+                            <text x="128" y="284" fill="#94a3b8" font-size="10">4</text>
+                            <circle cx="120" cy="235" r="3" fill="#94a3b8"/>
+                            <circle cx="120" cy="275" r="3" fill="#94a3b8"/>
+                            <!-- Actuator -->
+                            <line x1="96" y1="255" x2="112" y2="255" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 2"/>
+                            <path d="M 96 247 L 90 247 L 90 263 L 96 263" fill="none" stroke="#10b981" stroke-width="2.5"/>
+                            <!-- Blade -->
+                            <line id="svg-blade-s1" x1="120" y1="275" x2="104" y2="238" class="wire contact-blade" />
+                        </g>
+
+                        <!-- Path 2: KM1 (13-14) Self-holding NO contact -->
+                        <g>
+                            <text x="188" y="260" fill="#cbd5e1" font-size="11" font-weight="bold">KM1</text>
+                            <text x="238" y="234" fill="#94a3b8" font-size="10">13</text>
+                            <text x="238" y="284" fill="#94a3b8" font-size="10">14</text>
+                            <circle cx="230" cy="235" r="3" fill="#94a3b8"/>
+                            <circle cx="230" cy="275" r="3" fill="#94a3b8"/>
+                            <line id="svg-blade-km1-13" x1="230" y1="275" x2="214" y2="238" class="wire contact-blade" />
+                        </g>
+
+                        <!-- Switched Control Phase Bus: From S1(4) & KM1(14) -> KM1(A1) AND up to feed Paths 3, 4, 6, 7 -->
+                        <path id="w-switched-bus" d="M 120 275 L 120 500 M 230 275 L 230 310 L 120 310 M 230 310 L 230 140 L 1000 140 M 380 140 L 380 235 M 550 140 L 550 235 M 860 140 L 860 235 M 1000 140 L 1000 235" class="wire" />
+                        <circle cx="120" cy="310" r="4" fill="#64748b" id="node-km1-a1" />
+                        <circle cx="230" cy="310" r="4" fill="#64748b" id="node-bus-start" />
+                        <circle cx="380" cy="140" r="4" fill="#64748b" id="node-bus-p3" />
+                        <circle cx="550" cy="140" r="4" fill="#64748b" id="node-bus-p4" />
+                        <circle cx="860" cy="140" r="4" fill="#64748b" id="node-bus-p6" />
+                        <text x="615" y="132" fill="#94a3b8" font-size="10" text-anchor="middle">Kapcsolt vezérlőfázis sín (KM1:14 után)</text>
+
+                        <!-- KM1 COIL (A1-A2) in Path 1 -->
+                        <g>
+                            <text x="128" y="494" fill="#94a3b8" font-size="10">A1</text>
+                            <text x="128" y="554" fill="#94a3b8" font-size="10">A2</text>
+                            <rect id="coil-box-km1" x="96" y="500" width="48" height="40" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+                            <text x="120" y="525" fill="#f8fafc" font-size="12" font-weight="bold" text-anchor="middle">KM1</text>
+                        </g>
+                        <path d="M 120 540 L 120 590" class="wire-neutral" />
+
+                        <!-- ================= PATH 3: T2 (15-16 NC) -> T1 TIMER COIL ================= -->
+                        <!-- T2 (15-16) Timed NC Contact -->
+                        <g>
+                            <text x="332" y="260" fill="#34d399" font-size="11" font-weight="bold">T2</text>
+                            <text x="388" y="234" fill="#94a3b8" font-size="10">15</text>
+                            <text x="388" y="284" fill="#94a3b8" font-size="10">16</text>
+                            <line x1="380" y1="235" x2="388" y2="235" stroke="#94a3b8" stroke-width="2"/>
+                            <circle cx="380" cy="235" r="3" fill="#94a3b8"/>
+                            <circle cx="380" cy="275" r="3" fill="#94a3b8"/>
+                            <!-- Delayed opening arc symbol -->
+                            <path d="M 358 247 A 10 10 0 0 1 358 263" fill="none" stroke="#34d399" stroke-width="1.5"/>
+                            <line x1="358" y1="255" x2="381" y2="255" stroke="#34d399" stroke-width="1.2" stroke-dasharray="2 2"/>
+                            <!-- Blade (NC closed at rest) -->
+                            <line id="svg-blade-t2-15" x1="380" y1="275" x2="386" y2="235" class="wire contact-blade" />
+                        </g>
+
+                        <!-- Wire from T2(16) to T1(A1) -->
+                        <path id="w-t1-coil" d="M 380 275 L 380 500" class="wire" />
+
+                        <!-- T1 ON-DELAY TIMER COIL (A1-A2) -->
+                        <g>
+                            <text x="388" y="494" fill="#94a3b8" font-size="10">A1</text>
+                            <text x="388" y="554" fill="#94a3b8" font-size="10">A2</text>
+                            <rect id="coil-box-t1" x="356" y="500" width="48" height="40" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+                            <!-- IEC On-Delay X symbol -->
+                            <line x1="368" y1="500" x2="368" y2="540" stroke="#64748b" stroke-width="1.5"/>
+                            <line x1="356" y1="510" x2="368" y2="530" stroke="#64748b" stroke-width="1.2"/>
+                            <line x1="368" y1="510" x2="356" y2="530" stroke="#64748b" stroke-width="1.2"/>
+                            <text x="386" y="525" fill="#f8fafc" font-size="12" font-weight="bold" text-anchor="middle">T1</text>
+                            <!-- Progress bar next to T1 -->
+                            <rect x="410" y="504" width="46" height="32" rx="4" fill="#090d16" stroke="#334155" stroke-width="1"/>
+                            <text id="svg-txt-t1" x="433" y="518" fill="#fbbf24" font-size="10" font-weight="bold" text-anchor="middle">0.0s</text>
+                            <rect x="414" y="524" width="38" height="6" rx="2" fill="#1e293b"/>
+                            <rect id="svg-bar-t1" x="414" y="524" width="0" height="6" rx="2" fill="#f59e0b"/>
+                        </g>
+                        <path d="M 380 540 L 380 590" class="wire-neutral" />
+
+                        <!-- ================= PATH 4 & 5: T1 (15-18 NO) -> T2 COIL & KM2 COIL ================= -->
+                        <!-- T1 (15-18) Timed NO Contact -->
+                        <g>
+                            <text x="502" y="260" fill="#fbbf24" font-size="11" font-weight="bold">T1</text>
+                            <text x="558" y="234" fill="#94a3b8" font-size="10">15</text>
+                            <text x="558" y="284" fill="#94a3b8" font-size="10">18</text>
+                            <circle cx="550" cy="235" r="3" fill="#94a3b8"/>
+                            <circle cx="550" cy="275" r="3" fill="#94a3b8"/>
+                            <!-- Delayed closing arc symbol -->
+                            <path d="M 528 247 A 10 10 0 0 1 528 263" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+                            <line x1="528" y1="255" x2="540" y2="255" stroke="#fbbf24" stroke-width="1.2" stroke-dasharray="2 2"/>
+                            <!-- Blade (NO open at rest) -->
+                            <line id="svg-blade-t1-15" x1="550" y1="275" x2="534" y2="238" class="wire contact-blade" />
+                        </g>
+
+                        <!-- Wire from T1(18) feeding T2(A1) in Path 4 AND KM2(A1) in Path 5 -->
+                        <path id="w-stage2-coils" d="M 550 275 L 550 500 M 550 380 L 700 380 L 700 500" class="wire" />
+                        <circle cx="550" cy="380" r="4" fill="#64748b" id="node-t1-18-split" />
+
+                        <!-- T2 ON-DELAY TIMER COIL (A1-A2) in Path 4 -->
+                        <g>
+                            <text x="558" y="494" fill="#94a3b8" font-size="10">A1</text>
+                            <text x="558" y="554" fill="#94a3b8" font-size="10">A2</text>
+                            <rect id="coil-box-t2" x="526" y="500" width="48" height="40" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+                            <line x1="538" y1="500" x2="538" y2="540" stroke="#64748b" stroke-width="1.5"/>
+                            <line x1="526" y1="510" x2="538" y2="530" stroke="#64748b" stroke-width="1.2"/>
+                            <line x1="538" y1="510" x2="526" y2="530" stroke="#64748b" stroke-width="1.2"/>
+                            <text x="556" y="525" fill="#f8fafc" font-size="12" font-weight="bold" text-anchor="middle">T2</text>
+                            <!-- Progress bar next to T2 -->
+                            <rect x="580" y="504" width="46" height="32" rx="4" fill="#090d16" stroke="#334155" stroke-width="1"/>
+                            <text id="svg-txt-t2" x="603" y="518" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle">0.0s</text>
+                            <rect x="584" y="524" width="38" height="6" rx="2" fill="#1e293b"/>
+                            <rect id="svg-bar-t2" x="584" y="524" width="0" height="6" rx="2" fill="#10b981"/>
+                        </g>
+                        <path d="M 550 540 L 550 590" class="wire-neutral" />
+
+                        <!-- KM2 CONTACTOR COIL (A1-A2) in Path 5 -->
+                        <g>
+                            <text x="708" y="494" fill="#94a3b8" font-size="10">A1</text>
+                            <text x="708" y="554" fill="#94a3b8" font-size="10">A2</text>
+                            <rect id="coil-box-km2" x="676" y="500" width="48" height="40" rx="3" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+                            <text x="700" y="525" fill="#f8fafc" font-size="12" font-weight="bold" text-anchor="middle">KM2</text>
+                        </g>
+                        <path d="M 700 540 L 700 590" class="wire-neutral" />
+
+                        <!-- ================= PATH 6 & 7: JELZŐLÁMPÁK (H1 via KM2 NC & H2 via KM2 NO) ================= -->
+                        <!-- Path 6: KM2 (21-22 NC) -> H1 Lamp -->
+                        <g>
+                            <text x="816" y="260" fill="#cbd5e1" font-size="11" font-weight="bold">KM2</text>
+                            <text x="868" y="234" fill="#94a3b8" font-size="10">21</text>
+                            <text x="868" y="284" fill="#94a3b8" font-size="10">22</text>
+                            <line x1="860" y1="235" x2="868" y2="235" stroke="#94a3b8" stroke-width="2"/>
+                            <circle cx="860" cy="235" r="3" fill="#94a3b8"/>
+                            <circle cx="860" cy="275" r="3" fill="#94a3b8"/>
+                            <!-- Blade (NC closed when KM2 is OFF) -->
+                            <line id="svg-blade-km2-21" x1="860" y1="275" x2="866" y2="235" class="wire contact-blade" />
+                        </g>
+                        <path id="w-lamp1" d="M 860 275 L 860 498" class="wire" />
+
+                        <!-- H1 Lamp Symbol (X1-X2) -->
+                        <g>
+                            <text x="872" y="492" fill="#94a3b8" font-size="10">X1</text>
+                            <text x="872" y="556" fill="#94a3b8" font-size="10">X2</text>
+                            <circle id="svg-lamp-h1" cx="860" cy="520" r="22" fill="#0f172a" stroke="#64748b" stroke-width="2.5"/>
+                            <line x1="845" y1="505" x2="875" y2="535" stroke="#64748b" stroke-width="2" id="svg-lamp-h1-x1"/>
+                            <line x1="875" y1="505" x2="845" y2="535" stroke="#64748b" stroke-width="2" id="svg-lamp-h1-x2"/>
+                            <text x="822" y="524" fill="#fbbf24" font-size="12" font-weight="bold" text-anchor="end">H1</text>
+                        </g>
+                        <path d="M 860 542 L 860 590" class="wire-neutral" />
+
+                        <!-- Path 7: KM2 (13-14 NO) -> H2 Lamp -->
+                        <g>
+                            <text x="956" y="260" fill="#cbd5e1" font-size="11" font-weight="bold">KM2</text>
+                            <text x="1008" y="234" fill="#94a3b8" font-size="10">13</text>
+                            <text x="1008" y="284" fill="#94a3b8" font-size="10">14</text>
+                            <circle cx="1000" cy="235" r="3" fill="#94a3b8"/>
+                            <circle cx="1000" cy="275" r="3" fill="#94a3b8"/>
+                            <!-- Blade (NO closes when KM2 is ON) -->
+                            <line id="svg-blade-km2-13" x1="1000" y1="275" x2="984" y2="238" class="wire contact-blade" />
+                        </g>
+                        <path id="w-lamp2" d="M 1000 275 L 1000 498" class="wire" />
+
+                        <!-- H2 Lamp Symbol (X1-X2) -->
+                        <g>
+                            <text x="1012" y="492" fill="#94a3b8" font-size="10">X1</text>
+                            <text x="1012" y="556" fill="#94a3b8" font-size="10">X2</text>
+                            <circle id="svg-lamp-h2" cx="1000" cy="520" r="22" fill="#0f172a" stroke="#64748b" stroke-width="2.5"/>
+                            <line x1="985" y1="505" x2="1015" y2="535" stroke="#64748b" stroke-width="2" id="svg-lamp-h2-x1"/>
+                            <line x1="1015" y1="505" x2="985" y2="535" stroke="#64748b" stroke-width="2" id="svg-lamp-h2-x2"/>
+                            <text x="962" y="524" fill="#34d399" font-size="12" font-weight="bold" text-anchor="end">H2</text>
+                        </g>
+                        <path d="M 1000 542 L 1000 590" class="wire-neutral" />
+
+                        <!-- ================= BOTTOM NEUTRAL BUSBAR (Y = 590) ================= -->
+                        <text x="18" y="594" fill="#3b82f6" font-size="13" font-weight="bold">N (0V)</text>
+                        <circle cx="80" cy="590" r="4" fill="#3b82f6" />
+                        <path d="M 80 590 L 1040 590" class="wire-neutral" />
+                        <circle cx="120" cy="590" r="4" fill="#3b82f6" />
+                        <circle cx="380" cy="590" r="4" fill="#3b82f6" />
+                        <circle cx="550" cy="590" r="4" fill="#3b82f6" />
+                        <circle cx="700" cy="590" r="4" fill="#3b82f6" />
+                        <circle cx="860" cy="590" r="4" fill="#3b82f6" />
+                        <circle cx="1000" cy="590" r="4" fill="#3b82f6" />
+
+                        <!-- ================= ÉRINTKEZŐTÜKÖR (CONTACT CROSS-REFERENCE TABLES) ================= -->
+                        <g transform="translate(0, 615)" font-size="11">
+                            <!-- KM1 Cross-Ref (Path 1): NO in Path 2 -->
+                            <g transform="translate(120, 0)">
+                                <line x1="-12" y1="0" x2="-12" y2="22" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="0" x2="-6" y2="0" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="22" x2="-7" y2="6" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="0" x2="12" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="22" x2="6" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="0" y1="26" x2="0" y2="75" stroke="#475569" stroke-width="1.5"/>
+                                <line x1="-28" y1="26" x2="28" y2="26" stroke="#475569" stroke-width="1.5"/>
+                                <text x="-14" y="44" fill="#64748b" text-anchor="middle">-</text>
+                                <text x="14" y="44" fill="#cbd5e1" font-weight="bold" text-anchor="middle">2</text>
+                                <text x="0" y="95" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">Főrelé (KM1)</text>
+                            </g>
+
+                            <!-- T1 Cross-Ref (Path 3): NO in Path 4 -->
+                            <g transform="translate(380, 0)">
+                                <line x1="-12" y1="0" x2="-12" y2="22" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="0" x2="-6" y2="0" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="22" x2="-7" y2="6" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="0" x2="12" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="22" x2="6" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="0" y1="26" x2="0" y2="75" stroke="#475569" stroke-width="1.5"/>
+                                <line x1="-28" y1="26" x2="28" y2="26" stroke="#475569" stroke-width="1.5"/>
+                                <text x="-14" y="44" fill="#64748b" text-anchor="middle">-</text>
+                                <text x="14" y="44" fill="#fbbf24" font-weight="bold" text-anchor="middle">4</text>
+                                <text x="0" y="95" fill="#fbbf24" font-size="11" font-weight="bold" text-anchor="middle">1. Időrelé (T1)</text>
+                            </g>
+
+                            <!-- T2 Cross-Ref (Path 4): NC in Path 3 -->
+                            <g transform="translate(550, 0)">
+                                <line x1="-12" y1="0" x2="-12" y2="22" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="0" x2="-6" y2="0" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="22" x2="-7" y2="6" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="0" x2="12" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="22" x2="6" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="0" y1="26" x2="0" y2="75" stroke="#475569" stroke-width="1.5"/>
+                                <line x1="-28" y1="26" x2="28" y2="26" stroke="#475569" stroke-width="1.5"/>
+                                <text x="-14" y="44" fill="#34d399" font-weight="bold" text-anchor="middle">3</text>
+                                <text x="14" y="44" fill="#64748b" text-anchor="middle">-</text>
+                                <text x="0" y="95" fill="#34d399" font-size="11" font-weight="bold" text-anchor="middle">2. Időrelé (T2)</text>
+                            </g>
+
+                            <!-- KM2 Cross-Ref (Path 5): NC in Path 6, NO in Path 7 -->
+                            <g transform="translate(700, 0)">
+                                <line x1="-12" y1="0" x2="-12" y2="22" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="0" x2="-6" y2="0" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="-12" y1="22" x2="-7" y2="6" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="0" x2="12" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="12" y1="22" x2="6" y2="8" stroke="#64748b" stroke-width="1.5"/>
+                                <line x1="0" y1="26" x2="0" y2="75" stroke="#475569" stroke-width="1.5"/>
+                                <line x1="-28" y1="26" x2="28" y2="26" stroke="#475569" stroke-width="1.5"/>
+                                <text x="-14" y="44" fill="#fbbf24" font-weight="bold" text-anchor="middle">6</text>
+                                <text x="14" y="44" fill="#34d399" font-weight="bold" text-anchor="middle">7</text>
+                                <text x="0" y="95" fill="#38bdf8" font-size="11" font-weight="bold" text-anchor="middle">Váltórelé (KM2)</text>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- WIRING GUIDE & 2+2 COMPARISON MODAL -->
+    <div id="wiring-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-800/70 border-b border-slate-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        📋 2+2 Huzalozási Segédlet (2 Mágneskapcsoló + 2 Időrelé)
+                    </h2>
+                    <p class="text-xs text-slate-400">Pontról-pontra bekötési táblázat a KM3 mágneskapcsoló elhagyásával</p>
+                </div>
+                <button onclick="toggleWiringModal()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto space-y-6 text-sm">
+                <!-- Info Box about 2+2 vs 3+2 -->
+                <div class="p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-100 flex gap-3.5 items-start">
+                    <div class="text-2xl shrink-0">💡</div>
+                    <div class="space-y-1 text-xs leading-relaxed">
+                        <div class="font-bold text-sm text-emerald-300">Miért jobb és egyszerűbb a 2+2-es kapcsolás?</div>
+                        <p>
+                            A 3 mágneskapcsolós változathoz képest itt <strong>a KM3 mágneskapcsolóra nincs szükség</strong>. A két időrelé (<strong>T1 és T2</strong>) önmagában létrehozza a végtelenített ütemadó (astabil) ciklust, a <strong>KM2 mágneskapcsoló</strong> pedig a második ütemben behúzva a saját <strong>21–22 (NC)</strong> és <strong>13–14 (NO)</strong> segédérintkezőivel felváltva kapcsolja a H1 és H2 jelzőlámpákat.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Step by step wiring tables -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 1. Táp és Indítás -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <h3 class="text-xs font-mono uppercase text-red-400 font-bold mb-3">1–2. áramút: Védelem és Főrelé (KM1)</h3>
+                        <ul class="space-y-2 text-xs font-mono text-slate-300">
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>FI-relé Q0 (2)</span> <span>➔ Kismegszakító F1 (1)</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>Kismegszakító F1 (2)</span> <span>➔ GV2 motorvédő (13)</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>GV2 (14)</span> <span>➔ Piros STOP gomb S0 (1)</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>Piros STOP S0 (2)</span> <span>➔ Zöld START S1 (3) + KM1 (13)</span></li>
+                            <li class="flex justify-between text-emerald-400 font-bold"><span>Zöld START S1 (4) + KM1 (14)</span> <span>➔ KM1 (A1) tekercs</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- 2. Kapcsolt vezérlőfázis szétosztása -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <h3 class="text-xs font-mono uppercase text-amber-400 font-bold mb-3">Kapcsolt fázis sín (KM1:14 utáni áthidalások)</h3>
+                        <ul class="space-y-2 text-xs font-mono text-slate-300">
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>KM1 (14)</span> <span>➔ T2 időrelé (15) közös pont</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>T2 (15) áthidalás</span> <span>➔ T1 időrelé (15) közös pont</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>T1 (15) áthidalás</span> <span>➔ KM2 (21) nyitó (NC)</span></li>
+                            <li class="flex justify-between text-amber-300"><span>KM2 (21) áthidalás</span> <span>➔ KM2 (13) záró (NO)</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- 3. Ütemadó és Lámpák -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <h3 class="text-xs font-mono uppercase text-emerald-400 font-bold mb-3">3–7. áramút: Időrelék és Jelzőlámpák</h3>
+                        <ul class="space-y-2 text-xs font-mono text-slate-300">
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>3. áramút: T2 (16 - NC)</span> <span>➔ T1 időrelé (A1)</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>4–5. áramút: T1 (18 - NO)</span> <span>➔ T2 (A1) + KM2 (A1)</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1 text-amber-300"><span>6. áramút: KM2 (22 - NC)</span> <span>➔ H1 lámpa (X1)</span></li>
+                            <li class="flex justify-between text-emerald-300"><span>7. áramút: KM2 (14 - NO)</span> <span>➔ H2 lámpa (X1)</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- 4. Nullavezetők (Kék) -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                        <h3 class="text-xs font-mono uppercase text-blue-400 font-bold mb-3">Nullasín (Kék vezetékek)</h3>
+                        <ul class="space-y-2 text-xs font-mono text-slate-300">
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>FI-relé Q0 (4 - N)</span> <span>➔ Nullasín</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>Nullasín</span> <span>➔ KM1 (A2) és KM2 (A2)</span></li>
+                            <li class="flex justify-between border-b border-slate-800/80 pb-1"><span>Nullasín</span> <span>➔ T1 (A2) és T2 (A2)</span></li>
+                            <li class="flex justify-between text-blue-300"><span>Nullasín</span> <span>➔ H1 (X2) és H2 (X2) lámpák</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 bg-slate-800/70 border-t border-slate-700 flex justify-end">
+                <button onclick="toggleWiringModal()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition">
+                    Bezárás és vissza a szimulátorhoz
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIMULATION ENGINE SCRIPT (2+2 CONFIGURATION) -->
+    <script>
+        // --- CIRCUIT STATE (2 Contactors KM1, KM2 + 2 On-Delay Timers T1, T2) ---
+        const state = {
+            // Supply protection switches
+            Q0: true,
+            F1: true,
+            GV2: true,
+
+            // Pushbuttons
+            S0_pressed: false, // Red STOP button (1-2 NC)
+            S1_pressed: false, // Green START button (3-4 NO)
+
+            // Contactor Coils
+            KM1: false, // Main holding contactor
+            KM2: false, // Switching contactor (driven in parallel with T2)
+
+            // On-Delay Timers
+            T1_coil: false,
+            T1_elapsed: 0.0,
+            T1_set: 2.0,
+            T1_done: false, // Closes T1 (15-18 NO) in Path 4
+
+            T2_coil: false,
+            T2_elapsed: 0.0,
+            T2_set: 2.0,
+            T2_done: false, // Opens T2 (15-16 NC) in Path 3
+
+            // Indicator Lamps
+            H1: false, // Driven via KM2 (21-22 NC) in Path 6
+            H2: false, // Driven via KM2 (13-14 NO) in Path 7
+
+            // Visual flow toggle
+            flowAnim: true
+        };
+
+        // --- USER INTERACTION HANDLERS ---
+        function toggleProtection(device) {
+            state[device] = !state[device];
+            evaluateCircuit(0);
+            renderAll();
+        }
+
+        function pressStop(isPressed) {
+            state.S0_pressed = isPressed;
+            evaluateCircuit(0);
+            renderAll();
+        }
+
+        function pressStart(isPressed) {
+            state.S1_pressed = isPressed;
+            evaluateCircuit(0);
+            renderAll();
+        }
+
+        function updateTimerSetting(timer, val) {
+            const num = parseFloat(val);
+            if (timer === 'T1') {
+                state.T1_set = num;
+                document.getElementById('val-t1-set').textContent = num.toFixed(1);
+            } else {
+                state.T2_set = num;
+                document.getElementById('val-t2-set').textContent = num.toFixed(1);
+            }
+        }
+
+        function toggleFlowAnimation() {
+            state.flowAnim = !state.flowAnim;
+            const dot = document.getElementById('flow-dot');
+            dot.className = state.flowAnim ? 'w-2 h-2 rounded-full bg-emerald-400' : 'w-2 h-2 rounded-full bg-slate-600';
+            renderAll();
+        }
+
+        function toggleWiringModal() {
+            const modal = document.getElementById('wiring-modal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function resetCircuit() {
+            state.Q0 = true;
+            state.F1 = true;
+            state.GV2 = true;
+            state.S0_pressed = false;
+            state.S1_pressed = false;
+            state.KM1 = false;
+            state.KM2 = false;
+            state.T1_coil = false;
+            state.T1_elapsed = 0;
+            state.T1_done = false;
+            state.T2_coil = false;
+            state.T2_elapsed = 0;
+            state.T2_done = false;
+            evaluateCircuit(0);
+            renderAll();
+        }
+
+        // --- REAL-TIME 2+2 RELAY & TIMER SOLVER ---
+        function evaluateCircuit(dt) {
+            // Instantaneous contact propagation
+            for (let pass = 0; pass < 3; pass++) {
+                const lAfterQ0 = state.Q0;
+                const lAfterF1 = lAfterQ0 && state.F1;
+                const lMainRail = lAfterF1 && state.GV2;
+
+                // Path 1 & 2: S0 (1-2 NC) -> S1 (3-4 NO) || KM1 (13-14 NO) -> KM1 Coil
+                const s0Closed = !state.S0_pressed;
+                const lAfterStop = lMainRail && s0Closed;
+                const s1Closed = state.S1_pressed;
+                const km1HoldClosed = state.KM1;
+
+                state.KM1 = lAfterStop && (s1Closed || km1HoldClosed);
+                const lSwitchedBus = state.KM1; // Switched phase rail after S1(4)/KM1(14)
+
+                // Path 3: Switched Bus -> T2 (15-16 NC) -> T1 Timer Coil
+                const t2NcClosed = !state.T2_done;
+                state.T1_coil = lSwitchedBus && t2NcClosed;
+                if (!state.T1_coil) {
+                    state.T1_elapsed = 0;
+                    state.T1_done = false;
+                }
+
+                // Path 4 & 5: Switched Bus -> T1 (15-18 NO) -> T2 Timer Coil & KM2 Contactor Coil
+                const t1NoClosed = state.T1_done;
+                state.T2_coil = lSwitchedBus && t1NoClosed;
+                state.KM2 = lSwitchedBus && t1NoClosed;
+                if (!state.T2_coil) {
+                    state.T2_elapsed = 0;
+                    state.T2_done = false;
+                }
+
+                // Path 6: Switched Bus -> KM2 (21-22 NC) -> H1 Lamp
+                state.H1 = lSwitchedBus && !state.KM2;
+
+                // Path 7: Switched Bus -> KM2 (13-14 NO) -> H2 Lamp
+                state.H2 = lSwitchedBus && state.KM2;
+            }
+
+            // Advance On-Delay Timers
+            if (dt > 0) {
+                if (state.T1_coil) {
+                    state.T1_elapsed = Math.min(state.T1_set, state.T1_elapsed + dt);
+                    if (state.T1_elapsed >= state.T1_set) {
+                        state.T1_done = true;
+                    }
+                }
+
+                if (state.T2_coil) {
+                    state.T2_elapsed = Math.min(state.T2_set, state.T2_elapsed + dt);
+                    if (state.T2_elapsed >= state.T2_set) {
+                        // When T2 reaches its setpoint, T2_done opens T2(15-16) in Path 3 on the next pass, resetting the cycle!
+                        state.T2_done = true;
+                    }
+                }
+            }
+        }
+
+        // --- VISUAL RENDERING ---
+        function setWireLive(id, isLive, hasFlow = true) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (isLive) {
+                el.classList.add('wire-live');
+                if (state.flowAnim && hasFlow) {
+                    el.classList.add('wire-flow');
+                } else {
+                    el.classList.remove('wire-flow');
+                }
+            } else {
+                el.classList.remove('wire-live', 'wire-flow');
+            }
+        }
+
+        function setNodeLive(id, isLive) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.setAttribute('fill', isLive ? '#ef4444' : '#64748b');
+        }
+
+        function setCoilActive(id, isActive, color = '#ef4444') {
+            const box = document.getElementById(id);
+            if (!box) return;
+            if (isActive) {
+                box.setAttribute('stroke', color);
+                box.setAttribute('fill', 'rgba(239, 68, 68, 0.18)');
+                box.style.filter = `drop-shadow(0 0 8px ${color})`;
+            } else {
+                box.setAttribute('stroke', '#64748b');
+                box.setAttribute('fill', '#0f172a');
+                box.style.filter = 'none';
+            }
+        }
+
+        function renderAll() {
+            const lAfterQ0 = state.Q0;
+            const lAfterF1 = lAfterQ0 && state.F1;
+            const lMainRail = lAfterF1 && state.GV2;
+            const lAfterStop = lMainRail && !state.S0_pressed;
+            const lSwitchedBus = state.KM1;
+
+            // 1. Update Wires & Junction Nodes
+            setWireLive('w-supply-in', true, lMainRail);
+            setWireLive('w-q0-f1', lAfterQ0, lMainRail);
+            setWireLive('w-f1-gv2', lAfterF1, lMainRail);
+            setWireLive('w-main-to-s0', lMainRail, true);
+
+            setWireLive('w-after-stop', lAfterStop, state.KM1);
+            setNodeLive('node-after-stop', lAfterStop);
+
+            setWireLive('w-switched-bus', lSwitchedBus, true);
+            setNodeLive('node-km1-a1', lSwitchedBus);
+            setNodeLive('node-bus-start', lSwitchedBus);
+            setNodeLive('node-bus-p3', lSwitchedBus);
+            setNodeLive('node-bus-p4', lSwitchedBus);
+            setNodeLive('node-bus-p6', lSwitchedBus);
+
+            setWireLive('w-t1-coil', state.T1_coil, true);
+            setWireLive('w-stage2-coils', state.T2_coil, true);
+            setNodeLive('node-t1-18-split', state.T2_coil);
+
+            setWireLive('w-lamp1', state.H1, true);
+            setWireLive('w-lamp2', state.H2, true);
+
+            // 2. Update Contact Blades
+            updateHorizontalBlade('svg-blade-q0', 135, 180, 75, state.Q0, true);
+            updateHorizontalBlade('svg-blade-f1', 235, 280, 75, state.F1, lAfterQ0);
+            updateHorizontalBlade('svg-blade-gv2', 335, 380, 75, state.GV2, lAfterF1);
+
+            // Vertical NC contacts: S0(1-2), T2(15-16), KM2(21-22)
+            updateVerticalNC('svg-blade-s0', 120, 170, 130, !state.S0_pressed, lMainRail);
+            updateVerticalNC('svg-blade-t2-15', 380, 275, 235, !state.T2_done, lSwitchedBus);
+            updateVerticalNC('svg-blade-km2-21', 860, 275, 235, !state.KM2, lSwitchedBus);
+
+            // Vertical NO contacts: S1(3-4), KM1(13-14), T1(15-18), KM2(13-14)
+            updateVerticalNO('svg-blade-s1', 120, 275, 235, state.S1_pressed, lAfterStop);
+            updateVerticalNO('svg-blade-km1-13', 230, 275, 235, state.KM1, lAfterStop);
+            updateVerticalNO('svg-blade-t1-15', 550, 275, 235, state.T1_done, lSwitchedBus);
+            updateVerticalNO('svg-blade-km2-13', 1000, 275, 235, state.KM2, lSwitchedBus);
+
+            // 3. Coils Highlight
+            setCoilActive('coil-box-km1', state.KM1, '#ef4444');
+            setCoilActive('coil-box-t1', state.T1_coil, '#f59e0b');
+            setCoilActive('coil-box-t2', state.T2_coil, '#10b981');
+            setCoilActive('coil-box-km2', state.KM2, '#38bdf8');
+
+            // 4. SVG & Panel Lamps H1, H2
+            renderLamp('h1', state.H1, '#f59e0b', 'lamp-glow-amber', 'KM2 21–22 NC');
+            renderLamp('h2', state.H2, '#10b981', 'lamp-glow-green', 'KM2 13–14 NO');
+
+            // 5. Timers Progress Bars (SVG & Panel)
+            const t1Pct = Math.min(100, (state.T1_elapsed / state.T1_set) * 100);
+            document.getElementById('val-t1-cur').textContent = state.T1_elapsed.toFixed(1);
+            document.getElementById('bar-t1').style.width = `${t1Pct}%`;
+            document.getElementById('svg-txt-t1').textContent = `${state.T1_elapsed.toFixed(1)}s`;
+            document.getElementById('svg-bar-t1').setAttribute('width', (38 * t1Pct / 100).toFixed(1));
+            document.getElementById('dot-t1').className = state.T1_coil ? 'w-2 h-2 rounded-full bg-amber-400 animate-ping' : 'w-2 h-2 rounded-full bg-slate-600';
+
+            const t2Pct = Math.min(100, (state.T2_elapsed / state.T2_set) * 100);
+            document.getElementById('val-t2-cur').textContent = state.T2_elapsed.toFixed(1);
+            document.getElementById('bar-t2').style.width = `${t2Pct}%`;
+            document.getElementById('svg-txt-t2').textContent = `${state.T2_elapsed.toFixed(1)}s`;
+            document.getElementById('svg-bar-t2').setAttribute('width', (38 * t2Pct / 100).toFixed(1));
+            document.getElementById('dot-t2').className = state.T2_coil ? 'w-2 h-2 rounded-full bg-emerald-400 animate-ping' : 'w-2 h-2 rounded-full bg-slate-600';
+
+            // 6. Control Panel Protection Buttons & 2+2 Status Pills
+            renderProtectionBtn('q0', state.Q0);
+            renderProtectionBtn('f1', state.F1);
+            renderProtectionBtn('gv2', state.GV2);
+
+            renderCoilPill('pill-km1', 'KM1', state.KM1, 'red');
+            renderCoilPill('pill-t1', 'T1', state.T1_coil, 'amber');
+            renderCoilPill('pill-t2', 'T2', state.T2_coil, 'emerald');
+            renderCoilPill('pill-km2', 'KM2', state.KM2, 'sky');
+
+            // 7. Live Step-by-Step Status Text
+            updateStatusExplanation(lMainRail);
+        }
+
+        function updateHorizontalBlade(id, x1, x2, y, isClosed, incomingLive) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (isClosed) {
+                el.setAttribute('x2', x2);
+                el.setAttribute('y2', y);
+            } else {
+                el.setAttribute('x2', x2 - 6);
+                el.setAttribute('y2', y - 16);
+            }
+            if (incomingLive && isClosed) {
+                el.classList.add('wire-live');
+            } else {
+                el.classList.remove('wire-live');
+            }
+        }
+
+        function updateVerticalNC(id, x, yBottom, yTop, isClosed, incomingLive) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (isClosed) {
+                el.setAttribute('x2', x + 6);
+                el.setAttribute('y2', yTop);
+            } else {
+                el.setAttribute('x2', x + 18);
+                el.setAttribute('y2', yTop + 4);
+            }
+            if (incomingLive && isClosed) {
+                el.classList.add('wire-live');
+            } else {
+                el.classList.remove('wire-live');
+            }
+        }
+
+        function updateVerticalNO(id, x, yBottom, yTop, isClosed, incomingLive) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (isClosed) {
+                el.setAttribute('x2', x);
+                el.setAttribute('y2', yTop);
+            } else {
+                el.setAttribute('x2', x - 16);
+                el.setAttribute('y2', yTop + 3);
+            }
+            if (incomingLive && isClosed) {
+                el.classList.add('wire-live');
+            } else {
+                el.classList.remove('wire-live');
+            }
+        }
+
+        function renderLamp(suffix, isOn, hexColor, glowClass, contactLabel) {
+            const svgCircle = document.getElementById(`svg-lamp-${suffix}`);
+            const svgX1 = document.getElementById(`svg-lamp-${suffix}-x1`);
+            const svgX2 = document.getElementById(`svg-lamp-${suffix}-x2`);
+            const orb = document.getElementById(`lamp-orb-${suffix}`);
+            const stateTxt = document.getElementById(`lamp-state-${suffix}`);
+
+            if (isOn) {
+                svgCircle.setAttribute('fill', hexColor);
+                svgCircle.setAttribute('stroke', '#ffffff');
+                svgCircle.classList.add(glowClass);
+                svgX1.setAttribute('stroke', '#0f172a');
+                svgX2.setAttribute('stroke', '#0f172a');
+
+                orb.style.backgroundColor = hexColor;
+                orb.style.borderColor = '#ffffff';
+                orb.style.color = '#0f172a';
+                orb.classList.add(glowClass);
+                stateTxt.textContent = `VILÁGÍT (${contactLabel})`;
+                stateTxt.style.color = hexColor;
+            } else {
+                svgCircle.setAttribute('fill', '#0f172a');
+                svgCircle.setAttribute('stroke', '#64748b');
+                svgCircle.classList.remove(glowClass);
+                svgX1.setAttribute('stroke', '#64748b');
+                svgX2.setAttribute('stroke', '#64748b');
+
+                orb.style.backgroundColor = '';
+                orb.style.borderColor = '';
+                orb.style.color = '';
+                orb.classList.remove(glowClass);
+                stateTxt.textContent = `Kikapcsolva (${contactLabel})`;
+                stateTxt.style.color = '';
+            }
+        }
+
+        function renderProtectionBtn(key, isOn) {
+            const btn = document.getElementById(`ctrl-${key}`);
+            const badge = document.getElementById(`badge-${key}`);
+            if (isOn) {
+                btn.className = 'p-2.5 rounded-xl border text-left transition flex flex-col justify-between bg-slate-800/90 border-emerald-500/40 hover:border-emerald-400';
+                badge.className = 'px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-500/20 text-emerald-300';
+                badge.textContent = 'BE';
+            } else {
+                btn.className = 'p-2.5 rounded-xl border text-left transition flex flex-col justify-between bg-red-950/30 border-red-500/40 hover:border-red-400';
+                badge.className = 'px-1.5 py-0.5 text-[10px] font-mono font-bold rounded bg-red-500/20 text-red-300';
+                badge.textContent = 'KI';
+            }
+        }
+
+        function renderCoilPill(id, name, isOn, colorName) {
+            const el = document.getElementById(id);
+            const title = el.children[0].textContent;
+            if (isOn) {
+                el.className = `px-2 py-2 rounded-lg bg-${colorName}-950/60 border border-${colorName}-500/50 text-center`;
+                el.innerHTML = `<div class="text-[10px] font-mono text-${colorName}-300">${title}</div><div class="text-xs font-mono font-bold text-white mt-0.5">${name}: BE</div>`;
+            } else {
+                el.className = 'px-2 py-2 rounded-lg bg-slate-950 border border-slate-800 text-center';
+                el.innerHTML = `<div class="text-[10px] font-mono text-slate-500">${title}</div><div class="text-xs font-mono font-bold text-slate-400 mt-0.5">${name}: KI</div>`;
+            }
+        }
+
+        function updateStatusExplanation(lMainRail) {
+            const led = document.getElementById('status-led');
+            const badge = document.getElementById('status-badge');
+            const title = document.getElementById('status-title');
+            const desc = document.getElementById('status-desc');
+
+            if (!lMainRail) {
+                led.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+                badge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300';
+                badge.textContent = 'TÁP HIÁNYZIK';
+                title.textContent = 'Védelmi készülék lekapcsolva';
+                desc.innerHTML = 'A főáramkör megszakadt, mert a <strong>Q0 (FI-relé)</strong>, az <strong>F1 (kismegszakító)</strong> vagy a <strong>GV2 (motorvédő 13–14)</strong> le van kapcsolva. Kapcsold vissza őket a vezérlőpulton vagy a rajzon!';
+                return;
+            }
+
+            if (state.S0_pressed) {
+                led.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping';
+                badge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded bg-red-500/20 text-red-300';
+                badge.textContent = 'STOP AKTÍV';
+                title.textContent = 'STOP (S0) nyomógomb lenyomva';
+                desc.innerHTML = 'Az 1-es áramútban lévő <strong>S0 (1–2)</strong> nyitóérintkező megszakította a KM1 főrelé öntartását, így a teljes kapcsolt vezérlőfázis sín feszültségmentessé vált.';
+                return;
+            }
+
+            if (!state.KM1) {
+                led.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+                badge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300';
+                badge.textContent = 'KÉSZENLÉT';
+                title.textContent = 'Áramkör feszültség alatt, indításra kész';
+                desc.innerHTML = 'A fázis a védelmeken és az <strong>S0 (1–2)</strong> STOP gombon keresztül várakozik az <strong>S1 (3–4)</strong> START gomb előtt. Nyomd meg a <strong class="text-emerald-400">zöld START gombot</strong> a 2+2-es villogtató indításához!';
+                return;
+            }
+
+            if (!state.KM2) {
+                led.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
+                badge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300';
+                badge.textContent = '1. ÜTEM (H1 VILÁGÍT)';
+                title.textContent = 'KM1 öntartásban • KM2 elengedve (H1 világít) • T1 számol';
+                desc.innerHTML = `A <strong>KM2</strong> mágneskapcsoló nyugalmi állapotban van, így a 6-os áramútban lévő zárt <strong>KM2 (21–22 NC)</strong> érintkezőn keresztül világít a <strong>H1 lámpa</strong>. Közben a 3-as áramútban a <strong>T1 időrelé</strong> (${state.T1_elapsed.toFixed(1)}s / ${state.T1_set.toFixed(1)}s) számol.`;
+                return;
+            } else {
+                led.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
+                badge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300';
+                badge.textContent = '2. ÜTEM (H2 VILÁGÍT)';
+                title.textContent = 'T1 letelt • KM2 behúzva (H2 világít) • T2 számol';
+                desc.innerHTML = `A <strong>T1 (15–18)</strong> zárásával behúzott a <strong>KM2</strong> és elindult a <strong>T2 időrelé</strong> (${state.T2_elapsed.toFixed(1)}s / ${state.T2_set.toFixed(1)}s). A KM2 bontotta a <strong>21–22 (H1 kialudt)</strong> és zárta a <strong>13–14 (H2 világít)</strong> érintkezőjét. Amint a T2 letelik, a <strong>T2 (15–16)</strong> bontásával újraindul az 1. ütem!`;
+            }
+        }
+
+        // --- MAIN ANIMATION LOOP ---
+        let lastTime = performance.now();
+        function loop(now) {
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            evaluateCircuit(dt);
+            renderAll();
+
+            requestAnimationFrame(loop);
+        }
+
+        window.onload = () => {
+            evaluateCircuit(0);
+            renderAll();
+            requestAnimationFrame(loop);
+        };
+    </script>
+</body>
+</html>
